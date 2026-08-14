@@ -36,6 +36,7 @@
     <div class="nav-item" data-view="clients">Clients</div>
     <div class="nav-item" data-view="pipeline">Pipeline</div>
     <div class="nav-item" data-view="tasks">Tasks</div>
+    <div class="nav-item" data-view="workflow">Workflow</div>
 
     <div class="sidebar-footer" id="logoutBtn">Log out</div>
   </div>
@@ -113,6 +114,32 @@
         </select>
       </div>
       <div id="taskList"></div>
+    </div>
+
+    <!-- WORKFLOW -->
+    <div class="view" id="view-workflow">
+      <div class="main-header">
+        <div>
+          <h1 class="main-title">Workflow</h1>
+          <div class="main-sub">When work started, what service, and how far along it is</div>
+        </div>
+        <button class="btn btn-primary" id="addWorkflowBtn">+ Add item</button>
+      </div>
+      <div class="toolbar">
+        <select id="workflowClientFilter" class="task-status-select">
+          <option value="">All clients</option>
+        </select>
+        <select id="workflowServiceFilter" class="task-status-select">
+          <option value="">All services</option>
+          <option value="social">Social</option>
+          <option value="ads">Ads</option>
+          <option value="web">Web</option>
+          <option value="brand">Brand</option>
+          <option value="legal">Legal</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div id="workflowList"></div>
     </div>
 
   </div>
@@ -214,6 +241,54 @@
     <div class="modal-actions">
       <button class="btn btn-primary" id="saveTaskBtn">Save</button>
       <button class="btn btn-danger" id="deleteTaskBtn" style="display:none;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKFLOW MODAL -->
+<div class="modal-overlay" id="workflowModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" id="closeWorkflowModal">&times;</button>
+    <h2 id="workflowModalTitle">Add workflow item</h2>
+    <input type="hidden" id="workflowId">
+    <div class="field"><label>Title</label><input type="text" id="workflowTitle" placeholder="e.g. September captions"></div>
+    <div class="field">
+      <label>Client</label>
+      <select id="workflowClient"></select>
+    </div>
+    <div class="field">
+      <label>Service</label>
+      <select id="workflowService">
+        <option value="social">Social</option>
+        <option value="ads">Ads</option>
+        <option value="web">Web</option>
+        <option value="brand">Brand</option>
+        <option value="legal">Legal</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field"><label>Start date</label><input type="date" id="workflowStartDate"></div>
+    <div class="field">
+      <label>Frequency</label>
+      <select id="workflowFrequency">
+        <option value="one_time">One-time</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Stage</label>
+      <select id="workflowStage">
+        <option value="planned">Planned</option>
+        <option value="file_created">File created</option>
+        <option value="approved">Client approved</option>
+        <option value="posted">Posted</option>
+      </select>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="workflowNotes" rows="3"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="saveWorkflowBtn">Save</button>
+      <button class="btn btn-danger" id="deleteWorkflowBtn" style="display:none;">Delete</button>
     </div>
   </div>
 </div>
