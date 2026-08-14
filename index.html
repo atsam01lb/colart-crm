@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Colart CRM</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="login-brand">Colart CRM</div>
+    <div class="login-tagline">We Create… You Grow!</div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="you@colartdigitalmarketingagency.com">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••">
+    </div>
+    <button class="btn btn-primary" id="loginBtn">Log in</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app">
+  <div class="sidebar">
+    <div class="sidebar-brand">Colart CRM</div>
+    <div class="sidebar-tagline">We Create… You Grow!</div>
+
+    <div class="nav-item active" data-view="dashboard">Dashboard</div>
+    <div class="nav-item" data-view="clients">Clients</div>
+    <div class="nav-item" data-view="pipeline">Pipeline</div>
+    <div class="nav-item" data-view="tasks">Tasks</div>
+
+    <div class="sidebar-footer" id="logoutBtn">Log out</div>
+  </div>
+
+  <div class="main">
+
+    <!-- DASHBOARD -->
+    <div class="view active" id="view-dashboard">
+      <div class="main-header">
+        <div>
+          <h1 class="main-title">Dashboard</h1>
+          <div class="main-sub">Overview of clients, pipeline, and open work</div>
+        </div>
+      </div>
+      <div class="stat-strip">
+        <div class="stat-box"><div class="num" id="statActive">0</div><div class="lbl">Active clients</div></div>
+        <div class="stat-box"><div class="num" id="statProspects">0</div><div class="lbl">Open leads</div></div>
+        <div class="stat-box"><div class="num" id="statTasks">0</div><div class="lbl">Open tasks</div></div>
+        <div class="stat-box"><div class="num" id="statOverdue">0</div><div class="lbl">Overdue tasks</div></div>
+      </div>
+      <h3>Recently added clients</h3>
+      <div class="card-grid" id="recentClients"></div>
+    </div>
+
+    <!-- CLIENTS -->
+    <div class="view" id="view-clients">
+      <div class="main-header">
+        <div>
+          <h1 class="main-title">Clients</h1>
+          <div class="main-sub">Every client and prospect in one place</div>
+        </div>
+        <button class="btn btn-primary" id="addClientBtn">+ Add client</button>
+      </div>
+      <div class="toolbar">
+        <input type="text" id="clientSearch" placeholder="Search clients...">
+        <select id="clientFilter" class="task-status-select">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="prospect">Prospect</option>
+          <option value="paused">Paused</option>
+          <option value="past">Past</option>
+        </select>
+      </div>
+      <div class="card-grid" id="clientGrid"></div>
+    </div>
+
+    <!-- PIPELINE -->
+    <div class="view" id="view-pipeline">
+      <div class="main-header">
+        <div>
+          <h1 class="main-title">Pipeline</h1>
+          <div class="main-sub">Leads moving toward a signed client</div>
+        </div>
+        <button class="btn btn-primary" id="addDealBtn">+ Add lead</button>
+      </div>
+      <div class="pipeline-board" id="pipelineBoard"></div>
+    </div>
+
+    <!-- TASKS -->
+    <div class="view" id="view-tasks">
+      <div class="main-header">
+        <div>
+          <h1 class="main-title">Tasks</h1>
+          <div class="main-sub">Deliverables across all clients</div>
+        </div>
+        <button class="btn btn-primary" id="addTaskBtn">+ Add task</button>
+      </div>
+      <div class="toolbar">
+        <select id="taskFilter" class="task-status-select">
+          <option value="">All statuses</option>
+          <option value="todo">To do</option>
+          <option value="in_progress">In progress</option>
+          <option value="review">In review</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+      <div id="taskList"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- CLIENT MODAL -->
+<div class="modal-overlay" id="clientModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" id="closeClientModal">&times;</button>
+    <h2 id="clientModalTitle">Add client</h2>
+    <input type="hidden" id="clientId">
+    <div class="field"><label>Client / business name</label><input type="text" id="clientName"></div>
+    <div class="field"><label>Industry</label><input type="text" id="clientIndustry" placeholder="e.g. Restaurant, Retail, Medical"></div>
+    <div class="field"><label>Contact person</label><input type="text" id="clientContact"></div>
+    <div class="field"><label>Phone / WhatsApp</label><input type="text" id="clientPhone"></div>
+    <div class="field"><label>Email</label><input type="email" id="clientEmail"></div>
+    <div class="field"><label>Website</label><input type="text" id="clientWebsite"></div>
+    <div class="field">
+      <label>Status</label>
+      <select id="clientStatus">
+        <option value="prospect">Prospect</option>
+        <option value="active">Active</option>
+        <option value="paused">Paused</option>
+        <option value="past">Past</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Services (comma separated)</label>
+      <input type="text" id="clientServices" placeholder="social, ads, web, brand, legal">
+    </div>
+    <div class="field"><label>Notes</label><textarea id="clientNotes" rows="3"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="saveClientBtn">Save</button>
+      <button class="btn btn-danger" id="deleteClientBtn" style="display:none;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- DEAL MODAL -->
+<div class="modal-overlay" id="dealModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" id="closeDealModal">&times;</button>
+    <h2 id="dealModalTitle">Add lead</h2>
+    <input type="hidden" id="dealId">
+    <div class="field"><label>Lead / business name</label><input type="text" id="dealName"></div>
+    <div class="field">
+      <label>Stage</label>
+      <select id="dealStage">
+        <option value="inquiry">Inquiry</option>
+        <option value="proposal_sent">Proposal sent</option>
+        <option value="contract_signed">Contract signed</option>
+        <option value="onboarded">Onboarded</option>
+        <option value="lost">Lost</option>
+      </select>
+    </div>
+    <div class="field"><label>Estimated value (USD)</label><input type="number" id="dealValue"></div>
+    <div class="field"><label>Notes</label><textarea id="dealNotes" rows="3"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="saveDealBtn">Save</button>
+      <button class="btn btn-danger" id="deleteDealBtn" style="display:none;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- TASK MODAL -->
+<div class="modal-overlay" id="taskModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" id="closeTaskModal">&times;</button>
+    <h2 id="taskModalTitle">Add task</h2>
+    <input type="hidden" id="taskId">
+    <div class="field"><label>Title</label><input type="text" id="taskTitle" placeholder="e.g. September captions - Zaytouneh"></div>
+    <div class="field">
+      <label>Client</label>
+      <select id="taskClient"></select>
+    </div>
+    <div class="field">
+      <label>Type</label>
+      <select id="taskType">
+        <option value="social">Social</option>
+        <option value="ads">Ads</option>
+        <option value="web">Web</option>
+        <option value="brand">Brand</option>
+        <option value="legal">Legal</option>
+        <option value="report">Report</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Status</label>
+      <select id="taskStatus">
+        <option value="todo">To do</option>
+        <option value="in_progress">In progress</option>
+        <option value="review">In review</option>
+        <option value="done">Done</option>
+      </select>
+    </div>
+    <div class="field"><label>Due date</label><input type="date" id="taskDue"></div>
+    <div class="field"><label>Notes</label><textarea id="taskNotes" rows="3"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="saveTaskBtn">Save</button>
+      <button class="btn btn-danger" id="deleteTaskBtn" style="display:none;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
