@@ -2,6 +2,14 @@
 let clients = [];
 let deals = [];
 let tasks = [];
+let workflowItems = [];
+
+const WORKFLOW_STAGES = [
+  { key: 'planned', label: 'Planned' },
+  { key: 'file_created', label: 'File created' },
+  { key: 'approved', label: 'Client approved' },
+  { key: 'posted', label: 'Posted' },
+];
 
 const PIPELINE_STAGES = [
   { key: 'inquiry', label: 'Inquiry' },
@@ -46,6 +54,7 @@ async function enterApp() {
   renderClients();
   renderPipeline();
   renderTasks();
+  renderWorkflow();
 }
 
 // ---------- NAV ----------
@@ -60,14 +69,16 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 // ---------- DATA LOADING ----------
 async function loadAll() {
-  const [c, d, t] = await Promise.all([
+  const [c, d, t, w] = await Promise.all([
     supabaseClient.from('clients').select('*').order('created_at', { ascending: false }),
     supabaseClient.from('pipeline').select('*').order('created_at', { ascending: false }),
     supabaseClient.from('tasks').select('*').order('due_date', { ascending: true }),
+    supabaseClient.from('workflow_items').select('*').order('start_date', { ascending: false }),
   ]);
   clients = c.data || [];
   deals = d.data || [];
   tasks = t.data || [];
+  workflowItems = w.data || [];
 }
 
 // ---------- DASHBOARD ----------
@@ -152,7 +163,7 @@ document.getElementById('saveClientBtn').addEventListener('click', async () => {
   }
   closeModal('clientModal');
   await loadAll();
-  renderDashboard(); renderClients(); renderTasks(); populateTaskClientOptions();
+  renderDashboard(); renderClients(); renderTasks(); renderWorkflow(); populateTaskClientOptions();
 });
 
 document.getElementById('deleteClientBtn').addEventListener('click', async () => {
@@ -161,7 +172,7 @@ document.getElementById('deleteClientBtn').addEventListener('click', async () =>
   await supabaseClient.from('clients').delete().eq('id', id);
   closeModal('clientModal');
   await loadAll();
-  renderDashboard(); renderClients(); renderTasks();
+  renderDashboard(); renderClients(); renderTasks(); renderWorkflow();
 });
 
 // ---------- PIPELINE ----------
@@ -320,6 +331,109 @@ document.getElementById('deleteTaskBtn').addEventListener('click', async () => {
   closeModal('taskModal');
   await loadAll();
   renderDashboard(); renderTasks();
+});
+
+// ---------- WORKFLOW ----------
+function populateWorkflowClientOptions() {
+  const sel = document.getElementById('workflowClient');
+  sel.innerHTML = '<option value="">— No client —</option>' +
+    clients.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('');
+
+  const filterSel = document.getElementById('workflowClientFilter');
+  const current = filterSel.value;
+  filterSel.innerHTML = '<option value="">All clients</option>' +
+    clients.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('');
+  filterSel.value = current;
+}
+
+function renderWorkflow() {
+  populateWorkflowClientOptions();
+  const clientFilter = document.getElementById('workflowClientFilter').value;
+  const serviceFilter = document.getElementById('workflowServiceFilter').value;
+  const filtered = workflowItems.filter(w =>
+    (!clientFilter || w.client_id === clientFilter) &&
+    (!serviceFilter || w.service === serviceFilter)
+  );
+  const list = document.getElementById('workflowList');
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state">No workflow items yet. Track service start dates and deliverable stages here.</div>`;
+    return;
+  }
+  const stageOrder = WORKFLOW_STAGES.map(s => s.key);
+  list.innerHTML = filtered.map(w => {
+    const client = clients.find(c => c.id === w.client_id);
+    const currentIdx = stageOrder.indexOf(w.stage);
+    const stagesHTML = WORKFLOW_STAGES.map((s, i) => {
+      const cls = i < currentIdx ? 'done' : (i === currentIdx ? 'current' : '');
+      return `<span class="wf-stage ${cls}">${s.label}</span>`;
+    }).join('');
+    const freqLabel = { one_time: 'One-time', weekly: 'Weekly', monthly: 'Monthly' }[w.frequency] || w.frequency;
+    return `
+      <div class="workflow-row" data-id="${w.id}">
+        <div class="wf-top">
+          <div>
+            <div class="wf-title">${escapeHTML(w.title)}</div>
+            <div class="wf-meta">${client ? escapeHTML(client.name) : 'No client'} · ${escapeHTML(w.service)} · ${freqLabel}${w.start_date ? ' · started ' + w.start_date : ''}</div>
+          </div>
+        </div>
+        <div class="wf-stages">${stagesHTML}</div>
+      </div>`;
+  }).join('');
+  list.querySelectorAll('.workflow-row').forEach(row => row.addEventListener('click', () => openWorkflowModal(row.dataset.id)));
+}
+document.getElementById('workflowClientFilter').addEventListener('change', renderWorkflow);
+document.getElementById('workflowServiceFilter').addEventListener('change', renderWorkflow);
+
+document.getElementById('addWorkflowBtn').addEventListener('click', () => openWorkflowModal(null));
+document.getElementById('closeWorkflowModal').addEventListener('click', () => closeModal('workflowModal'));
+
+function openWorkflowModal(id) {
+  populateWorkflowClientOptions();
+  const w = workflowItems.find(x => x.id === id);
+  document.getElementById('workflowModalTitle').textContent = w ? 'Edit workflow item' : 'Add workflow item';
+  document.getElementById('workflowId').value = w ? w.id : '';
+  document.getElementById('workflowTitle').value = w ? w.title : '';
+  document.getElementById('workflowClient').value = w ? (w.client_id || '') : '';
+  document.getElementById('workflowService').value = w ? w.service : 'social';
+  document.getElementById('workflowStartDate').value = w ? (w.start_date || '') : '';
+  document.getElementById('workflowFrequency').value = w ? w.frequency : 'one_time';
+  document.getElementById('workflowStage').value = w ? w.stage : 'planned';
+  document.getElementById('workflowNotes').value = w ? (w.notes || '') : '';
+  document.getElementById('deleteWorkflowBtn').style.display = w ? 'inline-flex' : 'none';
+  openModal('workflowModal');
+}
+
+document.getElementById('saveWorkflowBtn').addEventListener('click', async () => {
+  const id = document.getElementById('workflowId').value;
+  const payload = {
+    title: document.getElementById('workflowTitle').value.trim(),
+    client_id: document.getElementById('workflowClient').value || null,
+    service: document.getElementById('workflowService').value,
+    start_date: document.getElementById('workflowStartDate').value || null,
+    frequency: document.getElementById('workflowFrequency').value,
+    stage: document.getElementById('workflowStage').value,
+    notes: document.getElementById('workflowNotes').value.trim(),
+    updated_at: new Date().toISOString(),
+  };
+  if (!payload.title) { alert('Title is required.'); return; }
+
+  if (id) {
+    await supabaseClient.from('workflow_items').update(payload).eq('id', id);
+  } else {
+    await supabaseClient.from('workflow_items').insert(payload);
+  }
+  closeModal('workflowModal');
+  await loadAll();
+  renderWorkflow();
+});
+
+document.getElementById('deleteWorkflowBtn').addEventListener('click', async () => {
+  const id = document.getElementById('workflowId').value;
+  if (!confirm('Delete this workflow item?')) return;
+  await supabaseClient.from('workflow_items').delete().eq('id', id);
+  closeModal('workflowModal');
+  await loadAll();
+  renderWorkflow();
 });
 
 // ---------- MODAL HELPERS ----------
