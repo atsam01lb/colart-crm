@@ -355,6 +355,40 @@ a { color: inherit; }
   border: none;
 }
 
+/* ---------- Workflow ---------- */
+.workflow-row {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.workflow-row .wf-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.workflow-row .wf-title { font-weight: 700; font-size: 14.5px; }
+.workflow-row .wf-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.wf-stages {
+  display: flex;
+  gap: 6px;
+}
+.wf-stage {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: #EFECF2;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.wf-stage.done { background: #E4F4EC; color: #2F7A56; }
+.wf-stage.current { background: #F1EAF7; color: var(--purple); }
+
 .empty-state {
   text-align: center;
   padding: 60px 20px;
