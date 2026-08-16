@@ -89,6 +89,23 @@ function renderDashboard() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('statOverdue').textContent = tasks.filter(t => t.due_date && t.due_date < today && t.status !== 'done').length;
 
+  const paidClients = clients.filter(c => c.status === 'active' && c.monthly_fee);
+  const mrr = paidClients.reduce((sum, c) => sum + Number(c.monthly_fee || 0), 0);
+  document.getElementById('statMRR').textContent = '$' + mrr.toLocaleString();
+  document.getElementById('statPaidClients').textContent = paidClients.length;
+
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+  const adSpend = workflowItems
+    .filter(w => w.service === 'ads' && w.start_date)
+    .filter(w => {
+      const d = new Date(w.start_date);
+      return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+    })
+    .reduce((sum, w) => sum + Number(w.budget_spent || 0), 0);
+  document.getElementById('statAdSpend').textContent = '$' + adSpend.toLocaleString();
+
   const recent = clients.slice(0, 6);
   const grid = document.getElementById('recentClients');
   grid.innerHTML = recent.length ? recent.map(clientCardHTML).join('') : `<div class="empty-state">No clients yet. Add your first one from the Clients tab.</div>`;
@@ -135,14 +152,42 @@ function openClientModal(id) {
   document.getElementById('clientEmail').value = c ? (c.email || '') : '';
   document.getElementById('clientWebsite').value = c ? (c.website || '') : '';
   document.getElementById('clientStatus').value = c ? c.status : 'prospect';
-  document.getElementById('clientServices').value = c ? (c.services || []).join(', ') : '';
+  document.getElementById('clientMonthlyFee').value = c ? (c.monthly_fee || '') : '';
   document.getElementById('clientNotes').value = c ? (c.notes || '') : '';
   document.getElementById('deleteClientBtn').style.display = c ? 'inline-flex' : 'none';
+
+  const services = c ? (c.services || []) : [];
+  document.querySelectorAll('.svc-check').forEach(cb => { cb.checked = services.includes(cb.value); });
+
+  document.getElementById('socialEmail').value = c ? (c.social_email || '') : '';
+  document.getElementById('socialEmailPassword').value = c ? (c.social_email_password || '') : '';
+  document.getElementById('facebookPage').value = c ? (c.facebook_page || '') : '';
+  document.getElementById('instagramUsername').value = c ? (c.instagram_username || '') : '';
+  document.getElementById('instagramPassword').value = c ? (c.instagram_password || '') : '';
+  document.getElementById('tiktokUsername').value = c ? (c.tiktok_username || '') : '';
+  document.getElementById('tiktokPassword').value = c ? (c.tiktok_password || '') : '';
+
+  document.getElementById('webEmail').value = c ? (c.web_email || '') : '';
+  document.getElementById('webEmailPassword').value = c ? (c.web_email_password || '') : '';
+  document.getElementById('domainUsername').value = c ? (c.domain_username || '') : '';
+  document.getElementById('domainPassword').value = c ? (c.domain_password || '') : '';
+  document.getElementById('hostingUsername').value = c ? (c.hosting_username || '') : '';
+  document.getElementById('hostingPassword').value = c ? (c.hosting_password || '') : '';
+
+  toggleServiceSections();
   openModal('clientModal');
 }
 
+function toggleServiceSections() {
+  const checked = Array.from(document.querySelectorAll('.svc-check')).filter(cb => cb.checked).map(cb => cb.value);
+  document.getElementById('socialFieldsSection').style.display = checked.includes('social') ? 'block' : 'none';
+  document.getElementById('webFieldsSection').style.display = checked.includes('web') ? 'block' : 'none';
+}
+document.querySelectorAll('.svc-check').forEach(cb => cb.addEventListener('change', toggleServiceSections));
+
 document.getElementById('saveClientBtn').addEventListener('click', async () => {
   const id = document.getElementById('clientId').value;
+  const services = Array.from(document.querySelectorAll('.svc-check')).filter(cb => cb.checked).map(cb => cb.value);
   const payload = {
     name: document.getElementById('clientName').value.trim(),
     industry: document.getElementById('clientIndustry').value.trim(),
@@ -151,8 +196,22 @@ document.getElementById('saveClientBtn').addEventListener('click', async () => {
     email: document.getElementById('clientEmail').value.trim(),
     website: document.getElementById('clientWebsite').value.trim(),
     status: document.getElementById('clientStatus').value,
-    services: document.getElementById('clientServices').value.split(',').map(s => s.trim()).filter(Boolean),
+    services: services,
+    monthly_fee: document.getElementById('clientMonthlyFee').value || null,
     notes: document.getElementById('clientNotes').value.trim(),
+    social_email: document.getElementById('socialEmail').value.trim(),
+    social_email_password: document.getElementById('socialEmailPassword').value.trim(),
+    facebook_page: document.getElementById('facebookPage').value.trim(),
+    instagram_username: document.getElementById('instagramUsername').value.trim(),
+    instagram_password: document.getElementById('instagramPassword').value.trim(),
+    tiktok_username: document.getElementById('tiktokUsername').value.trim(),
+    tiktok_password: document.getElementById('tiktokPassword').value.trim(),
+    web_email: document.getElementById('webEmail').value.trim(),
+    web_email_password: document.getElementById('webEmailPassword').value.trim(),
+    domain_username: document.getElementById('domainUsername').value.trim(),
+    domain_password: document.getElementById('domainPassword').value.trim(),
+    hosting_username: document.getElementById('hostingUsername').value.trim(),
+    hosting_password: document.getElementById('hostingPassword').value.trim(),
   };
   if (!payload.name) { alert('Client name is required.'); return; }
 
@@ -387,6 +446,12 @@ document.getElementById('workflowServiceFilter').addEventListener('change', rend
 document.getElementById('addWorkflowBtn').addEventListener('click', () => openWorkflowModal(null));
 document.getElementById('closeWorkflowModal').addEventListener('click', () => closeModal('workflowModal'));
 
+document.getElementById('workflowService').addEventListener('change', toggleAdsSection);
+function toggleAdsSection() {
+  document.getElementById('adsFieldsSection').style.display =
+    document.getElementById('workflowService').value === 'ads' ? 'block' : 'none';
+}
+
 function openWorkflowModal(id) {
   populateWorkflowClientOptions();
   const w = workflowItems.find(x => x.id === id);
@@ -399,7 +464,12 @@ function openWorkflowModal(id) {
   document.getElementById('workflowFrequency').value = w ? w.frequency : 'one_time';
   document.getElementById('workflowStage').value = w ? w.stage : 'planned';
   document.getElementById('workflowNotes').value = w ? (w.notes || '') : '';
+  document.getElementById('adsDateCreated').value = w ? (w.start_date || '') : '';
+  document.getElementById('adsBudgetSpent').value = w ? (w.budget_spent || '') : '';
+  document.getElementById('adsDuration').value = w ? (w.duration_days || '') : '';
+  document.getElementById('adsResults').value = w ? (w.results || '') : '';
   document.getElementById('deleteWorkflowBtn').style.display = w ? 'inline-flex' : 'none';
+  toggleAdsSection();
   openModal('workflowModal');
 }
 
@@ -413,6 +483,9 @@ document.getElementById('saveWorkflowBtn').addEventListener('click', async () =>
     frequency: document.getElementById('workflowFrequency').value,
     stage: document.getElementById('workflowStage').value,
     notes: document.getElementById('workflowNotes').value.trim(),
+    budget_spent: document.getElementById('adsBudgetSpent').value || null,
+    duration_days: document.getElementById('adsDuration').value || null,
+    results: document.getElementById('adsResults').value.trim(),
     updated_at: new Date().toISOString(),
   };
   if (!payload.title) { alert('Title is required.'); return; }
