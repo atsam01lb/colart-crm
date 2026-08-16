@@ -194,6 +194,7 @@ function openClientModal(id) {
   document.getElementById('clientWebsite').value = c ? (c.website || '') : '';
   document.getElementById('clientStatus').value = c ? (['active','past'].includes(c.status) ? 'client' : c.status) : 'prospect';
   document.getElementById('clientMonthlyFee').value = c ? (c.monthly_fee || '') : '';
+  document.getElementById('clientServiceFee').value = c ? (c.service_fee || '') : '';
   document.getElementById('clientStartDate').value = c ? (c.start_date || '') : '';
   document.getElementById('clientEndDate').value = c ? (c.end_date || '') : '';
   document.getElementById('clientNotes').value = c ? (c.notes || '') : '';
@@ -313,6 +314,8 @@ function toggleServiceSections() {
   const checked = Array.from(document.querySelectorAll('.svc-check')).filter(cb => cb.checked).map(cb => cb.value);
   document.getElementById('socialFieldsSection').style.display = checked.includes('social') ? 'block' : 'none';
   document.getElementById('webFieldsSection').style.display = checked.includes('web') ? 'block' : 'none';
+  document.getElementById('monthlyFeeField').style.display = checked.includes('social') ? 'block' : 'none';
+  document.getElementById('serviceFeeField').style.display = checked.includes('web') ? 'block' : 'none';
 }
 document.querySelectorAll('.svc-check').forEach(cb => cb.addEventListener('change', toggleServiceSections));
 
@@ -329,6 +332,7 @@ document.getElementById('saveClientBtn').addEventListener('click', async () => {
     status: document.getElementById('clientStatus').value,
     services: services,
     monthly_fee: document.getElementById('clientMonthlyFee').value || null,
+    service_fee: document.getElementById('clientServiceFee').value || null,
     start_date: document.getElementById('clientStartDate').value || null,
     end_date: document.getElementById('clientEndDate').value || null,
     notes: document.getElementById('clientNotes').value.trim(),
@@ -560,12 +564,22 @@ function renderWorkflow() {
       return `<span class="wf-stage ${cls}">${s.label}</span>`;
     }).join('');
     const freqLabel = { one_time: 'One-time', weekly: 'Weekly', monthly: 'Monthly' }[w.frequency] || w.frequency;
+    let metaLine = `${client ? escapeHTML(client.name) : 'No client'} · ${escapeHTML(w.service)} · ${freqLabel}${w.start_date ? ' · started ' + w.start_date : ''}`;
+    if (w.service === 'ads') {
+      const parts = [];
+      if (w.platform) parts.push(w.platform);
+      if (w.goal) parts.push('goal: ' + w.goal);
+      if (w.clicks) parts.push(w.clicks + ' clicks');
+      if (w.views) parts.push(w.views + ' views');
+      if (w.budget_spent) parts.push('$' + Number(w.budget_spent).toLocaleString() + ' spent');
+      metaLine = `${client ? escapeHTML(client.name) : 'No client'} · ${parts.join(' · ')}`;
+    }
     return `
       <div class="workflow-row" data-id="${w.id}">
         <div class="wf-top">
           <div>
             <div class="wf-title">${escapeHTML(w.title)}</div>
-            <div class="wf-meta">${client ? escapeHTML(client.name) : 'No client'} · ${escapeHTML(w.service)} · ${freqLabel}${w.start_date ? ' · started ' + w.start_date : ''}</div>
+            <div class="wf-meta">${metaLine}</div>
           </div>
         </div>
         <div class="wf-stages">${stagesHTML}</div>
@@ -600,6 +614,12 @@ function openWorkflowModal(id) {
   document.getElementById('adsDateCreated').value = w ? (w.start_date || '') : '';
   document.getElementById('adsBudgetSpent').value = w ? (w.budget_spent || '') : '';
   document.getElementById('adsDuration').value = w ? (w.duration_days || '') : '';
+  document.getElementById('adsPlatform').value = w ? (w.platform || 'facebook') : 'facebook';
+  document.getElementById('adsGoal').value = w ? (w.goal || 'awareness') : 'awareness';
+  document.getElementById('adsViews').value = w ? (w.views || '') : '';
+  document.getElementById('adsReach').value = w ? (w.reach || '') : '';
+  document.getElementById('adsClicks').value = w ? (w.clicks || '') : '';
+  document.getElementById('adsConversions').value = w ? (w.conversions || '') : '';
   document.getElementById('adsResults').value = w ? (w.results || '') : '';
   document.getElementById('deleteWorkflowBtn').style.display = w ? 'inline-flex' : 'none';
   toggleAdsSection();
@@ -618,6 +638,12 @@ document.getElementById('saveWorkflowBtn').addEventListener('click', async () =>
     notes: document.getElementById('workflowNotes').value.trim(),
     budget_spent: document.getElementById('adsBudgetSpent').value || null,
     duration_days: document.getElementById('adsDuration').value || null,
+    platform: document.getElementById('adsPlatform').value,
+    goal: document.getElementById('adsGoal').value,
+    views: document.getElementById('adsViews').value || null,
+    reach: document.getElementById('adsReach').value || null,
+    clicks: document.getElementById('adsClicks').value || null,
+    conversions: document.getElementById('adsConversions').value || null,
     results: document.getElementById('adsResults').value.trim(),
     updated_at: new Date().toISOString(),
   };
