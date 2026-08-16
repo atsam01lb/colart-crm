@@ -1,469 +1,659 @@
-@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap');
+// ---------- STATE ----------
+let clients = [];
+let deals = [];
+let tasks = [];
+let workflowItems = [];
+let payments = [];
 
-:root {
-  --purple: #643083;
-  --purple-dark: #4a2361;
-  --magenta: #C81781;
-  --teal: #67B38F;
-  --ink: #241A30;
-  --paper: #FBFAFC;
-  --card: #FFFFFF;
-  --line: #E7E1EE;
-  --muted: #8A7D99;
-  --radius: 10px;
-}
+const WORKFLOW_STAGES = [
+  { key: 'planned', label: 'Planned' },
+  { key: 'file_created', label: 'File created' },
+  { key: 'approved', label: 'Client approved' },
+  { key: 'posted', label: 'Posted' },
+];
 
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  font-family: 'Lato', sans-serif;
-  background: var(--paper);
-  color: var(--ink);
-}
-
-a { color: inherit; }
-
-/* ---------- Login ---------- */
-.login-screen {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(160deg, var(--purple) 0%, var(--purple-dark) 55%, #2c1740 100%);
-  padding: 24px;
+// Prospect and Paused are manual pipeline states. For everyone else (status = "client",
+// or legacy "active"/"past" values), Active vs Ended is computed from start/end dates.
+function getEffectiveStatus(c) {
+  if (c.status === 'prospect' || c.status === 'paused') return c.status;
+  const today = new Date().toISOString().split('T')[0];
+  if (c.end_date && c.end_date < today) return 'past';
+  if (c.start_date && c.start_date > today) return 'prospect';
+  return 'active';
 }
 
-.login-card {
-  background: var(--card);
-  border-radius: 16px;
-  padding: 40px 36px;
-  width: 100%;
-  max-width: 380px;
-  box-shadow: 0 30px 60px rgba(36, 26, 48, 0.35);
+const PIPELINE_STAGES = [
+  { key: 'inquiry', label: 'Inquiry' },
+  { key: 'proposal_sent', label: 'Proposal sent' },
+  { key: 'contract_signed', label: 'Contract signed' },
+  { key: 'onboarded', label: 'Onboarded' },
+  { key: 'lost', label: 'Lost' },
+];
+
+// ---------- AUTH ----------
+document.getElementById('loginBtn').addEventListener('click', login);
+document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+async function login() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if (!email || !password) { errEl.textContent = 'Enter email and password.'; return; }
+
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) { errEl.textContent = error.message; return; }
+  enterApp();
 }
 
-.login-brand {
-  font-weight: 900;
-  font-size: 22px;
-  letter-spacing: 0.5px;
-  color: var(--purple);
-  margin-bottom: 2px;
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await supabaseClient.auth.signOut();
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('loginScreen').style.display = 'flex';
+});
+
+async function checkSession() {
+  const { data } = await supabaseClient.auth.getSession();
+  if (data.session) enterApp();
 }
 
-.login-tagline {
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 28px;
+async function enterApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+  await loadAll();
+  renderDashboard();
+  renderClients();
+  renderPipeline();
+  renderTasks();
+  renderWorkflow();
 }
 
-.field {
-  margin-bottom: 16px;
+// ---------- NAV ----------
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById('view-' + item.dataset.view).classList.add('active');
+  });
+});
+
+// ---------- DATA LOADING ----------
+async function loadAll() {
+  const [c, d, t, w, p] = await Promise.all([
+    supabaseClient.from('clients').select('*').order('created_at', { ascending: false }),
+    supabaseClient.from('pipeline').select('*').order('created_at', { ascending: false }),
+    supabaseClient.from('tasks').select('*').order('due_date', { ascending: true }),
+    supabaseClient.from('workflow_items').select('*').order('start_date', { ascending: false }),
+    supabaseClient.from('payments').select('*').order('payment_date', { ascending: false }),
+  ]);
+  clients = c.data || [];
+  deals = d.data || [];
+  tasks = t.data || [];
+  workflowItems = w.data || [];
+  payments = p.data || [];
 }
 
-.field label {
-  display: block;
-  font-size: 13px;
-  font-weight: 700;
-  margin-bottom: 6px;
-  color: var(--ink);
+// ---------- DASHBOARD ----------
+function renderDashboard() {
+  document.getElementById('statActive').textContent = clients.filter(c => getEffectiveStatus(c) === 'active').length;
+  document.getElementById('statProspects').textContent = deals.filter(d => !['onboarded', 'lost'].includes(d.stage)).length;
+  document.getElementById('statTasks').textContent = tasks.filter(t => t.status !== 'done').length;
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('statOverdue').textContent = tasks.filter(t => t.due_date && t.due_date < today && t.status !== 'done').length;
+
+  const paidClients = clients.filter(c => getEffectiveStatus(c) === 'active' && c.monthly_fee);
+  const mrr = paidClients.reduce((sum, c) => sum + Number(c.monthly_fee || 0), 0);
+  document.getElementById('statMRR').textContent = '$' + mrr.toLocaleString();
+  document.getElementById('statPaidClients').textContent = paidClients.length;
+
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+
+  const paidThisMonth = payments
+    .filter(p => p.payment_date && new Date(p.payment_date).getMonth() === thisMonth && new Date(p.payment_date).getFullYear() === thisYear)
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  document.getElementById('statPaidThisMonth').textContent = '$' + paidThisMonth.toLocaleString();
+
+  const adSpend = workflowItems
+    .filter(w => w.service === 'ads' && w.start_date)
+    .filter(w => {
+      const d = new Date(w.start_date);
+      return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+    })
+    .reduce((sum, w) => sum + Number(w.budget_spent || 0), 0);
+  document.getElementById('statAdSpend').textContent = '$' + adSpend.toLocaleString();
+
+  const recentPayments = payments.slice(0, 6);
+  const paymentsEl = document.getElementById('recentPayments');
+  paymentsEl.innerHTML = recentPayments.length
+    ? recentPayments.map(p => {
+        const client = clients.find(c => c.id === p.client_id);
+        return `
+          <div class="payment-row" data-client-id="${p.client_id || ''}">
+            <span class="pay-amount">${client ? escapeHTML(client.name) : 'Unknown client'}</span>
+            <span>${p.amount ? '$' + Number(p.amount).toLocaleString() : '—'}</span>
+            <span>${p.payment_date || ''}</span>
+            <span class="pay-status ${p.status}">${p.status === 'full' ? 'Fully paid' : 'Partial'}</span>
+          </div>`;
+      }).join('')
+    : `<div class="empty-state">No payments logged yet.</div>`;
+  paymentsEl.querySelectorAll('.payment-row').forEach(row => {
+    row.addEventListener('click', () => {
+      if (row.dataset.clientId) openClientModal(row.dataset.clientId);
+    });
+  });
+
+  const recent = clients.slice(0, 6);
+  const grid = document.getElementById('recentClients');
+  grid.innerHTML = recent.length ? recent.map(clientCardHTML).join('') : `<div class="empty-state">No clients yet. Add your first one from the Clients tab.</div>`;
+  grid.querySelectorAll('.client-card').forEach(card => card.addEventListener('click', () => openClientModal(card.dataset.id)));
 }
 
-.field input, .field select, .field textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1.5px solid var(--line);
-  font-family: inherit;
-  font-size: 14px;
-  background: var(--paper);
-  color: var(--ink);
+// ---------- CLIENTS ----------
+function clientCardHTML(c) {
+  const status = getEffectiveStatus(c);
+  const statusLabel = status === 'past' ? 'Ended' : status;
+  const services = (c.services || []).map(s => `<span class="tag">${escapeHTML(s)}</span>`).join('');
+  return `
+    <div class="client-card status-${status}" data-id="${c.id}">
+      <span class="status-pill status-${status}">${statusLabel}</span>
+      <h3>${escapeHTML(c.name)}</h3>
+      <div class="meta">${escapeHTML(c.industry || '')}${c.contact_name ? ' · ' + escapeHTML(c.contact_name) : ''}</div>
+      <div class="tag-row">${services}</div>
+    </div>`;
 }
 
-.field input:focus, .field select:focus, .field textarea:focus {
-  outline: none;
-  border-color: var(--purple);
+function renderClients() {
+  const search = document.getElementById('clientSearch').value.toLowerCase();
+  const filter = document.getElementById('clientFilter').value;
+  const filtered = clients.filter(c =>
+    (!filter || getEffectiveStatus(c) === filter) &&
+    (!search || c.name.toLowerCase().includes(search) || (c.industry || '').toLowerCase().includes(search))
+  );
+  const grid = document.getElementById('clientGrid');
+  grid.innerHTML = filtered.length ? filtered.map(clientCardHTML).join('') : `<div class="empty-state">No clients match. <button class="btn btn-ghost" onclick="document.getElementById('clientSearch').value='';document.getElementById('clientFilter').value='';renderClients();">Clear filters</button></div>`;
+  grid.querySelectorAll('.client-card').forEach(card => card.addEventListener('click', () => openClientModal(card.dataset.id)));
+}
+document.getElementById('clientSearch').addEventListener('input', renderClients);
+document.getElementById('clientFilter').addEventListener('change', renderClients);
+
+document.getElementById('addClientBtn').addEventListener('click', () => openClientModal(null));
+document.getElementById('closeClientModal').addEventListener('click', () => closeModal('clientModal'));
+
+function openClientModal(id) {
+  const c = clients.find(x => x.id === id);
+  document.getElementById('clientModalTitle').textContent = c ? 'Edit client' : 'Add client';
+  document.getElementById('clientId').value = c ? c.id : '';
+  document.getElementById('clientName').value = c ? c.name : '';
+  document.getElementById('clientIndustry').value = c ? (c.industry || '') : '';
+  document.getElementById('clientContact').value = c ? (c.contact_name || '') : '';
+  document.getElementById('clientPhone').value = c ? (c.phone || '') : '';
+  document.getElementById('clientEmail').value = c ? (c.email || '') : '';
+  document.getElementById('clientWebsite').value = c ? (c.website || '') : '';
+  document.getElementById('clientStatus').value = c ? (['active','past'].includes(c.status) ? 'client' : c.status) : 'prospect';
+  document.getElementById('clientMonthlyFee').value = c ? (c.monthly_fee || '') : '';
+  document.getElementById('clientStartDate').value = c ? (c.start_date || '') : '';
+  document.getElementById('clientEndDate').value = c ? (c.end_date || '') : '';
+  document.getElementById('clientNotes').value = c ? (c.notes || '') : '';
+  document.getElementById('deleteClientBtn').style.display = c ? 'inline-flex' : 'none';
+
+  const services = c ? (c.services || []) : [];
+  document.querySelectorAll('.svc-check').forEach(cb => { cb.checked = services.includes(cb.value); });
+
+  document.getElementById('socialEmail').value = c ? (c.social_email || '') : '';
+  document.getElementById('socialEmailPassword').value = c ? (c.social_email_password || '') : '';
+  document.getElementById('facebookPage').value = c ? (c.facebook_page || '') : '';
+  document.getElementById('instagramUsername').value = c ? (c.instagram_username || '') : '';
+  document.getElementById('instagramPassword').value = c ? (c.instagram_password || '') : '';
+  document.getElementById('tiktokUsername').value = c ? (c.tiktok_username || '') : '';
+  document.getElementById('tiktokPassword').value = c ? (c.tiktok_password || '') : '';
+
+  document.getElementById('webEmail').value = c ? (c.web_email || '') : '';
+  document.getElementById('webEmailPassword').value = c ? (c.web_email_password || '') : '';
+  document.getElementById('domainUsername').value = c ? (c.domain_username || '') : '';
+  document.getElementById('domainPassword').value = c ? (c.domain_password || '') : '';
+  document.getElementById('hostingUsername').value = c ? (c.hosting_username || '') : '';
+  document.getElementById('hostingPassword').value = c ? (c.hosting_password || '') : '';
+
+  toggleServiceSections();
+  renderPaymentsSection(c);
+  openModal('clientModal');
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 18px;
-  font-family: inherit;
-  font-weight: 700;
-  font-size: 14px;
-  cursor: pointer;
-  transition: transform 0.1s ease, opacity 0.15s ease;
-}
-.btn:active { transform: scale(0.98); }
-.btn-primary { background: var(--purple); color: #fff; width: 100%; }
-.btn-primary:hover { background: var(--purple-dark); }
-.btn-ghost { background: transparent; color: var(--purple); border: 1.5px solid var(--line); }
-.btn-ghost:hover { border-color: var(--purple); }
-.btn-danger { background: transparent; color: var(--magenta); border: 1.5px solid var(--line); }
+function renderPaymentsSection(c) {
+  const section = document.getElementById('paymentsSection');
+  if (!c) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
 
-.login-error {
-  color: var(--magenta);
-  font-size: 13px;
-  margin-top: 10px;
-  min-height: 16px;
+  const badge = document.getElementById('membershipBadge');
+  const isActive = getEffectiveStatus(c) === 'active';
+  badge.innerHTML = `<span class="membership-badge ${isActive ? 'active' : 'ended'}">${isActive ? 'Active' : 'Ended'}</span>`;
+
+  const clientPayments = payments.filter(p => p.client_id === c.id);
+  const list = document.getElementById('paymentsList');
+  list.innerHTML = clientPayments.length
+    ? clientPayments.map(p => `
+        <div class="payment-row" data-id="${p.id}">
+          <span class="pay-amount">${p.amount ? '$' + Number(p.amount).toLocaleString() : '—'}</span>
+          <span>${p.payment_date || ''}</span>
+          <span class="pay-status ${p.status}">${p.status === 'full' ? 'Fully paid' : 'Partial'}</span>
+        </div>`).join('')
+    : `<div style="font-size:13px; color:var(--muted);">No payments logged yet.</div>`;
+
+  list.querySelectorAll('.payment-row').forEach(row => {
+    row.addEventListener('click', () => openPaymentModal(row.dataset.id, c.id));
+  });
 }
 
-/* ---------- App shell ---------- */
-.app {
-  display: none;
-  min-height: 100vh;
-  grid-template-columns: 220px 1fr;
-}
-.app.visible { display: grid; }
+document.getElementById('addPaymentBtn').addEventListener('click', () => {
+  const clientId = document.getElementById('clientId').value;
+  if (!clientId) { alert('Save the client first, then add payments.'); return; }
+  openPaymentModal(null, clientId);
+});
 
-.sidebar {
-  background: linear-gradient(180deg, var(--purple) 0%, var(--purple-dark) 100%);
-  color: #fff;
-  padding: 26px 18px;
-  display: flex;
-  flex-direction: column;
-}
+document.getElementById('generatePaymentBtn').addEventListener('click', () => {
+  const clientId = document.getElementById('clientId').value;
+  if (!clientId) { alert('Save the client first, then generate a payment.'); return; }
+  const c = clients.find(x => x.id === clientId);
+  if (!c || !c.monthly_fee) { alert('Set a monthly fee for this client first — the payment is pre-filled from it.'); return; }
+  openPaymentModal(null, clientId, { amount: c.monthly_fee, date: new Date().toISOString().split('T')[0] });
+});
+document.getElementById('closePaymentModal').addEventListener('click', () => closeModal('paymentModal'));
 
-.sidebar-brand {
-  font-weight: 900;
-  font-size: 19px;
-  margin-bottom: 2px;
-}
-.sidebar-tagline {
-  font-size: 11px;
-  opacity: 0.7;
-  margin-bottom: 32px;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 14px;
-  cursor: pointer;
-  opacity: 0.75;
-  margin-bottom: 4px;
-}
-.nav-item:hover { opacity: 1; background: rgba(255,255,255,0.08); }
-.nav-item.active { opacity: 1; background: rgba(255,255,255,0.16); }
-
-.sidebar-footer {
-  margin-top: auto;
-  font-size: 12px;
-  opacity: 0.6;
-  cursor: pointer;
+function openPaymentModal(id, clientId, prefill) {
+  const p = payments.find(x => x.id === id);
+  document.getElementById('paymentModalTitle').textContent = p ? 'Edit payment' : 'Add payment';
+  document.getElementById('paymentId').value = p ? p.id : '';
+  document.getElementById('paymentClientId').value = clientId;
+  document.getElementById('paymentDate').value = p ? p.payment_date : (prefill ? prefill.date : '');
+  document.getElementById('paymentAmount').value = p ? (p.amount || '') : (prefill ? prefill.amount : '');
+  document.getElementById('paymentStatus').value = p ? p.status : 'full';
+  document.getElementById('paymentNotes').value = p ? (p.notes || '') : '';
+  document.getElementById('deletePaymentBtn').style.display = p ? 'inline-flex' : 'none';
+  openModal('paymentModal');
 }
 
-.main {
-  padding: 32px 40px;
-  max-width: 1200px;
+document.getElementById('savePaymentBtn').addEventListener('click', async () => {
+  const id = document.getElementById('paymentId').value;
+  const clientId = document.getElementById('paymentClientId').value;
+  const payload = {
+    client_id: clientId,
+    payment_date: document.getElementById('paymentDate').value || null,
+    amount: document.getElementById('paymentAmount').value || null,
+    status: document.getElementById('paymentStatus').value,
+    notes: document.getElementById('paymentNotes').value.trim(),
+  };
+  if (!payload.payment_date) { alert('Payment date is required.'); return; }
+
+  if (id) {
+    await supabaseClient.from('payments').update(payload).eq('id', id);
+  } else {
+    await supabaseClient.from('payments').insert(payload);
+  }
+  closeModal('paymentModal');
+  await loadAll();
+  const c = clients.find(x => x.id === clientId);
+  renderPaymentsSection(c);
+});
+
+document.getElementById('deletePaymentBtn').addEventListener('click', async () => {
+  const id = document.getElementById('paymentId').value;
+  const clientId = document.getElementById('paymentClientId').value;
+  if (!confirm('Delete this payment record?')) return;
+  await supabaseClient.from('payments').delete().eq('id', id);
+  closeModal('paymentModal');
+  await loadAll();
+  const c = clients.find(x => x.id === clientId);
+  renderPaymentsSection(c);
+});
+
+function toggleServiceSections() {
+  const checked = Array.from(document.querySelectorAll('.svc-check')).filter(cb => cb.checked).map(cb => cb.value);
+  document.getElementById('socialFieldsSection').style.display = checked.includes('social') ? 'block' : 'none';
+  document.getElementById('webFieldsSection').style.display = checked.includes('web') ? 'block' : 'none';
+}
+document.querySelectorAll('.svc-check').forEach(cb => cb.addEventListener('change', toggleServiceSections));
+
+document.getElementById('saveClientBtn').addEventListener('click', async () => {
+  const id = document.getElementById('clientId').value;
+  const services = Array.from(document.querySelectorAll('.svc-check')).filter(cb => cb.checked).map(cb => cb.value);
+  const payload = {
+    name: document.getElementById('clientName').value.trim(),
+    industry: document.getElementById('clientIndustry').value.trim(),
+    contact_name: document.getElementById('clientContact').value.trim(),
+    phone: document.getElementById('clientPhone').value.trim(),
+    email: document.getElementById('clientEmail').value.trim(),
+    website: document.getElementById('clientWebsite').value.trim(),
+    status: document.getElementById('clientStatus').value,
+    services: services,
+    monthly_fee: document.getElementById('clientMonthlyFee').value || null,
+    start_date: document.getElementById('clientStartDate').value || null,
+    end_date: document.getElementById('clientEndDate').value || null,
+    notes: document.getElementById('clientNotes').value.trim(),
+    social_email: document.getElementById('socialEmail').value.trim(),
+    social_email_password: document.getElementById('socialEmailPassword').value.trim(),
+    facebook_page: document.getElementById('facebookPage').value.trim(),
+    instagram_username: document.getElementById('instagramUsername').value.trim(),
+    instagram_password: document.getElementById('instagramPassword').value.trim(),
+    tiktok_username: document.getElementById('tiktokUsername').value.trim(),
+    tiktok_password: document.getElementById('tiktokPassword').value.trim(),
+    web_email: document.getElementById('webEmail').value.trim(),
+    web_email_password: document.getElementById('webEmailPassword').value.trim(),
+    domain_username: document.getElementById('domainUsername').value.trim(),
+    domain_password: document.getElementById('domainPassword').value.trim(),
+    hosting_username: document.getElementById('hostingUsername').value.trim(),
+    hosting_password: document.getElementById('hostingPassword').value.trim(),
+  };
+  if (!payload.name) { alert('Client name is required.'); return; }
+
+  if (id) {
+    await supabaseClient.from('clients').update(payload).eq('id', id);
+  } else {
+    await supabaseClient.from('clients').insert(payload);
+  }
+  closeModal('clientModal');
+  await loadAll();
+  renderDashboard(); renderClients(); renderTasks(); renderWorkflow(); populateTaskClientOptions();
+});
+
+document.getElementById('deleteClientBtn').addEventListener('click', async () => {
+  const id = document.getElementById('clientId').value;
+  if (!confirm('Delete this client? This also removes their linked tasks.')) return;
+  await supabaseClient.from('clients').delete().eq('id', id);
+  closeModal('clientModal');
+  await loadAll();
+  renderDashboard(); renderClients(); renderTasks(); renderWorkflow();
+});
+
+// ---------- PIPELINE ----------
+function renderPipeline() {
+  const board = document.getElementById('pipelineBoard');
+  board.innerHTML = PIPELINE_STAGES.map(stage => {
+    const stageDeals = deals.filter(d => d.stage === stage.key);
+    return `
+      <div class="pipeline-col">
+        <h4>${stage.label} (${stageDeals.length})</h4>
+        ${stageDeals.map(d => `
+          <div class="deal-card" data-id="${d.id}">
+            <strong>${escapeHTML(d.lead_name)}</strong>
+            ${d.value ? `<div class="val">$${Number(d.value).toLocaleString()}</div>` : ''}
+          </div>`).join('')}
+      </div>`;
+  }).join('');
+  board.querySelectorAll('.deal-card').forEach(card => card.addEventListener('click', () => openDealModal(card.dataset.id)));
 }
 
-.main-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-.main-title {
-  font-size: 24px;
-  font-weight: 900;
-  margin: 0;
-}
-.main-sub {
-  color: var(--muted);
-  font-size: 13px;
-  margin-top: 4px;
+document.getElementById('addDealBtn').addEventListener('click', () => openDealModal(null));
+document.getElementById('closeDealModal').addEventListener('click', () => closeModal('dealModal'));
+
+function openDealModal(id) {
+  const d = deals.find(x => x.id === id);
+  document.getElementById('dealModalTitle').textContent = d ? 'Edit lead' : 'Add lead';
+  document.getElementById('dealId').value = d ? d.id : '';
+  document.getElementById('dealName').value = d ? d.lead_name : '';
+  document.getElementById('dealStage').value = d ? d.stage : 'inquiry';
+  document.getElementById('dealValue').value = d ? (d.value || '') : '';
+  document.getElementById('dealNotes').value = d ? (d.notes || '') : '';
+  document.getElementById('deleteDealBtn').style.display = d ? 'inline-flex' : 'none';
+  openModal('dealModal');
 }
 
-.view { display: none; }
-.view.active { display: block; }
+document.getElementById('saveDealBtn').addEventListener('click', async () => {
+  const id = document.getElementById('dealId').value;
+  const payload = {
+    lead_name: document.getElementById('dealName').value.trim(),
+    stage: document.getElementById('dealStage').value,
+    value: document.getElementById('dealValue').value || null,
+    notes: document.getElementById('dealNotes').value.trim(),
+    updated_at: new Date().toISOString(),
+  };
+  if (!payload.lead_name) { alert('Lead name is required.'); return; }
 
-/* ---------- Stat strip ---------- */
-.stat-strip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  margin-bottom: 28px;
-}
-.stat-box {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-}
-.stat-box .num { font-size: 26px; font-weight: 900; color: var(--purple); }
-.stat-box .lbl { font-size: 12px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+  if (id) {
+    await supabaseClient.from('pipeline').update(payload).eq('id', id);
+  } else {
+    await supabaseClient.from('pipeline').insert(payload);
+  }
+  closeModal('dealModal');
+  await loadAll();
+  renderDashboard(); renderPipeline();
+});
 
-/* ---------- Cards / lists ---------- */
-.toolbar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 18px;
-  align-items: center;
-}
-.toolbar input[type="text"] {
-  flex: 1;
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1.5px solid var(--line);
-  font-family: inherit;
-  font-size: 14px;
-}
+document.getElementById('deleteDealBtn').addEventListener('click', async () => {
+  const id = document.getElementById('dealId').value;
+  if (!confirm('Delete this lead?')) return;
+  await supabaseClient.from('pipeline').delete().eq('id', id);
+  closeModal('dealModal');
+  await loadAll();
+  renderDashboard(); renderPipeline();
+});
 
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+// ---------- TASKS ----------
+function populateTaskClientOptions() {
+  const sel = document.getElementById('taskClient');
+  sel.innerHTML = '<option value="">— No client —</option>' +
+    clients.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('');
 }
 
-.client-card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--muted);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  cursor: pointer;
-}
-.client-card.status-active { border-left-color: var(--teal); }
-.client-card.status-prospect { border-left-color: var(--magenta); }
-.client-card.status-paused { border-left-color: #D9A441; }
-.client-card.status-past { border-left-color: var(--muted); }
+function renderTasks() {
+  const filter = document.getElementById('taskFilter').value;
+  const filtered = tasks.filter(t => !filter || t.status === filter);
+  const list = document.getElementById('taskList');
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state">No tasks match.</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(t => {
+    const client = clients.find(c => c.id === t.client_id);
+    return `
+      <div class="task-row" data-id="${t.id}">
+        <div style="flex:1; cursor:pointer;" class="task-open">
+          <div class="task-title">${escapeHTML(t.title)}</div>
+          <div class="task-client">${client ? escapeHTML(client.name) : 'No client'} ${t.due_date ? '· due ' + t.due_date : ''}</div>
+        </div>
+        <select class="task-status-select task-status-inline">
+          <option value="todo" ${t.status === 'todo' ? 'selected' : ''}>To do</option>
+          <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>In progress</option>
+          <option value="review" ${t.status === 'review' ? 'selected' : ''}>In review</option>
+          <option value="done" ${t.status === 'done' ? 'selected' : ''}>Done</option>
+        </select>
+      </div>`;
+  }).join('');
 
-.client-card h3 { margin: 0 0 4px; font-size: 16px; }
-.client-card .meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-.tag-row { display: flex; flex-wrap: wrap; gap: 5px; }
-.tag {
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 20px;
-  background: #F1EAF7;
-  color: var(--purple);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
+  list.querySelectorAll('.task-open').forEach(el => {
+    el.addEventListener('click', () => openTaskModal(el.closest('.task-row').dataset.id));
+  });
+  list.querySelectorAll('.task-status-inline').forEach(sel => {
+    sel.addEventListener('change', async (e) => {
+      const id = sel.closest('.task-row').dataset.id;
+      await supabaseClient.from('tasks').update({ status: e.target.value }).eq('id', id);
+      await loadAll();
+      renderDashboard(); renderTasks();
+    });
+  });
 }
-.status-pill {
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 3px 9px;
-  border-radius: 20px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-.status-pill.status-active { background: #E4F4EC; color: #2F7A56; }
-.status-pill.status-prospect { background: #FCE6F1; color: var(--magenta); }
-.status-pill.status-paused { background: #FCF1DC; color: #A87415; }
-.status-pill.status-past { background: #EFECF2; color: var(--muted); }
+document.getElementById('taskFilter').addEventListener('change', renderTasks);
 
-/* ---------- Pipeline ---------- */
-.pipeline-board {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-}
-.pipeline-col {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 12px;
-  min-height: 200px;
-}
-.pipeline-col h4 {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  color: var(--muted);
-  margin: 0 0 10px;
-}
-.deal-card {
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.deal-card strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
-.deal-card .val { color: var(--teal); font-weight: 700; font-size: 12px; }
+document.getElementById('addTaskBtn').addEventListener('click', () => { populateTaskClientOptions(); openTaskModal(null); });
+document.getElementById('closeTaskModal').addEventListener('click', () => closeModal('taskModal'));
 
-/* ---------- Tasks ---------- */
-.task-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin-bottom: 8px;
-}
-.task-row .task-title { flex: 1; font-weight: 700; font-size: 14px; }
-.task-row .task-client { font-size: 12px; color: var(--muted); }
-.task-status-select {
-  border: 1.5px solid var(--line);
-  border-radius: 6px;
-  padding: 5px 8px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
+function openTaskModal(id) {
+  populateTaskClientOptions();
+  const t = tasks.find(x => x.id === id);
+  document.getElementById('taskModalTitle').textContent = t ? 'Edit task' : 'Add task';
+  document.getElementById('taskId').value = t ? t.id : '';
+  document.getElementById('taskTitle').value = t ? t.title : '';
+  document.getElementById('taskClient').value = t ? (t.client_id || '') : '';
+  document.getElementById('taskType').value = t ? t.type : 'social';
+  document.getElementById('taskStatus').value = t ? t.status : 'todo';
+  document.getElementById('taskDue').value = t ? (t.due_date || '') : '';
+  document.getElementById('taskNotes').value = t ? (t.notes || '') : '';
+  document.getElementById('deleteTaskBtn').style.display = t ? 'inline-flex' : 'none';
+  openModal('taskModal');
 }
 
-/* ---------- Modal ---------- */
-.modal-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(36, 26, 48, 0.5);
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  padding: 20px;
-}
-.modal-overlay.visible { display: flex; }
-.modal {
-  background: var(--card);
-  border-radius: 14px;
-  padding: 28px;
-  width: 100%;
-  max-width: 460px;
-  max-height: 88vh;
-  overflow-y: auto;
-}
-.modal h2 { margin-top: 0; font-size: 19px; }
-.modal-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 20px;
-}
-.modal-close {
-  position: absolute;
-  top: 18px; right: 18px;
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 20px;
-  background: none;
-  border: none;
+document.getElementById('saveTaskBtn').addEventListener('click', async () => {
+  const id = document.getElementById('taskId').value;
+  const payload = {
+    title: document.getElementById('taskTitle').value.trim(),
+    client_id: document.getElementById('taskClient').value || null,
+    type: document.getElementById('taskType').value,
+    status: document.getElementById('taskStatus').value,
+    due_date: document.getElementById('taskDue').value || null,
+    notes: document.getElementById('taskNotes').value.trim(),
+  };
+  if (!payload.title) { alert('Task title is required.'); return; }
+
+  if (id) {
+    await supabaseClient.from('tasks').update(payload).eq('id', id);
+  } else {
+    await supabaseClient.from('tasks').insert(payload);
+  }
+  closeModal('taskModal');
+  await loadAll();
+  renderDashboard(); renderTasks();
+});
+
+document.getElementById('deleteTaskBtn').addEventListener('click', async () => {
+  const id = document.getElementById('taskId').value;
+  if (!confirm('Delete this task?')) return;
+  await supabaseClient.from('tasks').delete().eq('id', id);
+  closeModal('taskModal');
+  await loadAll();
+  renderDashboard(); renderTasks();
+});
+
+// ---------- WORKFLOW ----------
+function populateWorkflowClientOptions() {
+  const sel = document.getElementById('workflowClient');
+  sel.innerHTML = '<option value="">— No client —</option>' +
+    clients.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('');
+
+  const filterSel = document.getElementById('workflowClientFilter');
+  const current = filterSel.value;
+  filterSel.innerHTML = '<option value="">All clients</option>' +
+    clients.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('');
+  filterSel.value = current;
 }
 
-/* ---------- Workflow ---------- */
-/* ---------- Service checkboxes & credential sections ---------- */
-.service-checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+function renderWorkflow() {
+  populateWorkflowClientOptions();
+  const clientFilter = document.getElementById('workflowClientFilter').value;
+  const serviceFilter = document.getElementById('workflowServiceFilter').value;
+  const filtered = workflowItems.filter(w =>
+    (!clientFilter || w.client_id === clientFilter) &&
+    (!serviceFilter || w.service === serviceFilter)
+  );
+  const list = document.getElementById('workflowList');
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state">No workflow items yet. Track service start dates and deliverable stages here.</div>`;
+    return;
+  }
+  const stageOrder = WORKFLOW_STAGES.map(s => s.key);
+  list.innerHTML = filtered.map(w => {
+    const client = clients.find(c => c.id === w.client_id);
+    const currentIdx = stageOrder.indexOf(w.stage);
+    const stagesHTML = WORKFLOW_STAGES.map((s, i) => {
+      const cls = i < currentIdx ? 'done' : (i === currentIdx ? 'current' : '');
+      return `<span class="wf-stage ${cls}">${s.label}</span>`;
+    }).join('');
+    const freqLabel = { one_time: 'One-time', weekly: 'Weekly', monthly: 'Monthly' }[w.frequency] || w.frequency;
+    return `
+      <div class="workflow-row" data-id="${w.id}">
+        <div class="wf-top">
+          <div>
+            <div class="wf-title">${escapeHTML(w.title)}</div>
+            <div class="wf-meta">${client ? escapeHTML(client.name) : 'No client'} · ${escapeHTML(w.service)} · ${freqLabel}${w.start_date ? ' · started ' + w.start_date : ''}</div>
+          </div>
+        </div>
+        <div class="wf-stages">${stagesHTML}</div>
+      </div>`;
+  }).join('');
+  list.querySelectorAll('.workflow-row').forEach(row => row.addEventListener('click', () => openWorkflowModal(row.dataset.id)));
 }
-.check-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  background: var(--paper);
-  border: 1.5px solid var(--line);
-  border-radius: 8px;
-  padding: 7px 12px;
-  cursor: pointer;
-}
-.check-item input { cursor: pointer; }
+document.getElementById('workflowClientFilter').addEventListener('change', renderWorkflow);
+document.getElementById('workflowServiceFilter').addEventListener('change', renderWorkflow);
 
-.credential-section {
-  border: 1.5px dashed var(--line);
-  border-radius: 10px;
-  padding: 14px 16px 4px;
-  margin-bottom: 16px;
-  background: var(--paper);
-}
-.credential-section h4 {
-  margin: 0 0 10px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  color: var(--purple);
+document.getElementById('addWorkflowBtn').addEventListener('click', () => openWorkflowModal(null));
+document.getElementById('closeWorkflowModal').addEventListener('click', () => closeModal('workflowModal'));
+
+document.getElementById('workflowService').addEventListener('change', toggleAdsSection);
+function toggleAdsSection() {
+  document.getElementById('adsFieldsSection').style.display =
+    document.getElementById('workflowService').value === 'ads' ? 'block' : 'none';
 }
 
-.payment-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 12px;
-  margin-bottom: 6px;
-  cursor: pointer;
-  font-size: 13px;
+function openWorkflowModal(id) {
+  populateWorkflowClientOptions();
+  const w = workflowItems.find(x => x.id === id);
+  document.getElementById('workflowModalTitle').textContent = w ? 'Edit workflow item' : 'Add workflow item';
+  document.getElementById('workflowId').value = w ? w.id : '';
+  document.getElementById('workflowTitle').value = w ? w.title : '';
+  document.getElementById('workflowClient').value = w ? (w.client_id || '') : '';
+  document.getElementById('workflowService').value = w ? w.service : 'social';
+  document.getElementById('workflowStartDate').value = w ? (w.start_date || '') : '';
+  document.getElementById('workflowFrequency').value = w ? w.frequency : 'one_time';
+  document.getElementById('workflowStage').value = w ? w.stage : 'planned';
+  document.getElementById('workflowNotes').value = w ? (w.notes || '') : '';
+  document.getElementById('adsDateCreated').value = w ? (w.start_date || '') : '';
+  document.getElementById('adsBudgetSpent').value = w ? (w.budget_spent || '') : '';
+  document.getElementById('adsDuration').value = w ? (w.duration_days || '') : '';
+  document.getElementById('adsResults').value = w ? (w.results || '') : '';
+  document.getElementById('deleteWorkflowBtn').style.display = w ? 'inline-flex' : 'none';
+  toggleAdsSection();
+  openModal('workflowModal');
 }
-.payment-row .pay-amount { font-weight: 700; flex: 1; }
-.payment-row .pay-status { font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; }
-.payment-row .pay-status.full { background: #E4F4EC; color: #2F7A56; }
-.payment-row .pay-status.partial { background: #FCF1DC; color: #A87415; }
-.membership-badge {
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 3px 9px;
-  border-radius: 20px;
-  text-transform: uppercase;
-  margin-left: 8px;
-}
-.membership-badge.active { background: #E4F4EC; color: #2F7A56; }
-.membership-badge.ended { background: #EFECF2; color: var(--muted); }
 
-.workflow-row {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 14px 18px;
-  margin-bottom: 10px;
-  cursor: pointer;
-}
-.workflow-row .wf-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.workflow-row .wf-title { font-weight: 700; font-size: 14.5px; }
-.workflow-row .wf-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.wf-stages {
-  display: flex;
-  gap: 6px;
-}
-.wf-stage {
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 20px;
-  background: #EFECF2;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-.wf-stage.done { background: #E4F4EC; color: #2F7A56; }
-.wf-stage.current { background: #F1EAF7; color: var(--purple); }
+document.getElementById('saveWorkflowBtn').addEventListener('click', async () => {
+  const id = document.getElementById('workflowId').value;
+  const payload = {
+    title: document.getElementById('workflowTitle').value.trim(),
+    client_id: document.getElementById('workflowClient').value || null,
+    service: document.getElementById('workflowService').value,
+    start_date: document.getElementById('workflowStartDate').value || null,
+    frequency: document.getElementById('workflowFrequency').value,
+    stage: document.getElementById('workflowStage').value,
+    notes: document.getElementById('workflowNotes').value.trim(),
+    budget_spent: document.getElementById('adsBudgetSpent').value || null,
+    duration_days: document.getElementById('adsDuration').value || null,
+    results: document.getElementById('adsResults').value.trim(),
+    updated_at: new Date().toISOString(),
+  };
+  if (!payload.title) { alert('Title is required.'); return; }
 
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--muted);
-}
-.empty-state .btn { margin-top: 14px; }
+  if (id) {
+    await supabaseClient.from('workflow_items').update(payload).eq('id', id);
+  } else {
+    await supabaseClient.from('workflow_items').insert(payload);
+  }
+  closeModal('workflowModal');
+  await loadAll();
+  renderWorkflow();
+});
 
-@media (max-width: 900px) {
-  .app.visible { grid-template-columns: 1fr; }
-  .sidebar { flex-direction: row; overflow-x: auto; align-items: center; padding: 14px; }
-  .sidebar-brand, .sidebar-tagline, .sidebar-footer { display: none; }
-  .nav-item { white-space: nowrap; margin-bottom: 0; }
-  .main { padding: 20px; }
-  .stat-strip { grid-template-columns: repeat(2, 1fr); }
-  .pipeline-board { grid-template-columns: 1fr; }
+document.getElementById('deleteWorkflowBtn').addEventListener('click', async () => {
+  const id = document.getElementById('workflowId').value;
+  if (!confirm('Delete this workflow item?')) return;
+  await supabaseClient.from('workflow_items').delete().eq('id', id);
+  closeModal('workflowModal');
+  await loadAll();
+  renderWorkflow();
+});
+
+// ---------- MODAL HELPERS ----------
+function openModal(id) { document.getElementById(id).classList.add('visible'); }
+function closeModal(id) { document.getElementById(id).classList.remove('visible'); }
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('visible'); });
+});
+
+// ---------- UTIL ----------
+function escapeHTML(str) {
+  if (!str) return '';
+  return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
+
+// ---------- INIT ----------
+checkSession();
