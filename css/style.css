@@ -391,6 +391,26 @@ a { color: inherit; }
   color: var(--purple);
 }
 
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.team-row .team-email { font-size: 12px; color: var(--muted); min-width: 200px; }
+.team-row input, .team-row select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1.5px solid var(--line);
+  font-family: inherit;
+  font-size: 13px;
+}
+
 .payment-row {
   display: flex;
   align-items: center;
