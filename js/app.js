@@ -5,6 +5,7 @@ let tasks = [];
 let workflowItems = [];
 let payments = [];
 let currentUserRole = 'employee';
+let profiles = [];
 
 const WORKFLOW_STAGES = [
   { key: 'planned', label: 'Planned' },
@@ -75,6 +76,9 @@ async function enterApp() {
   currentUserRole = profile ? profile.role : 'employee';
   applyRoleRestrictions();
 
+  const { data: allProfiles } = await supabaseClient.from('profiles').select('id, full_name, role');
+  profiles = allProfiles || [];
+
   await loadAll();
   renderDashboard();
   renderClients();
@@ -87,6 +91,7 @@ function applyRoleRestrictions() {
   const isAdmin = currentUserRole === 'admin';
   const dashboardNav = document.querySelector('.nav-item[data-view="dashboard"]');
   dashboardNav.style.display = isAdmin ? '' : 'none';
+  document.getElementById('addTaskBtn').style.display = isAdmin ? '' : 'none';
   if (!isAdmin) {
     // employees land on Clients instead of the financial dashboard
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -509,6 +514,10 @@ function populateTaskClientOptions() {
   const sel = document.getElementById('taskClient');
   sel.innerHTML = '<option value="">— No client —</option>' +
     clients.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('');
+
+  const assignSel = document.getElementById('taskAssignTo');
+  assignSel.innerHTML = '<option value="">— Unassigned —</option>' +
+    profiles.map(p => `<option value="${p.id}">${escapeHTML(p.full_name || 'Unnamed')} ${p.role === 'admin' ? '(admin)' : ''}</option>`).join('');
 }
 
 function renderTasks() {
@@ -521,11 +530,12 @@ function renderTasks() {
   }
   list.innerHTML = filtered.map(t => {
     const client = clients.find(c => c.id === t.client_id);
+    const assignee = profiles.find(p => p.id === t.assigned_to);
     return `
       <div class="task-row" data-id="${t.id}">
         <div style="flex:1; cursor:pointer;" class="task-open">
           <div class="task-title">${escapeHTML(t.title)}</div>
-          <div class="task-client">${client ? escapeHTML(client.name) : 'No client'} ${t.due_date ? '· due ' + t.due_date : ''}</div>
+          <div class="task-client">${client ? escapeHTML(client.name) : 'No client'} ${assignee ? '· ' + escapeHTML(assignee.full_name || 'Unnamed') : ''} ${t.due_date ? '· due ' + t.due_date : ''}</div>
         </div>
         <select class="task-status-select task-status-inline">
           <option value="todo" ${t.status === 'todo' ? 'selected' : ''}>To do</option>
@@ -537,7 +547,12 @@ function renderTasks() {
   }).join('');
 
   list.querySelectorAll('.task-open').forEach(el => {
-    el.addEventListener('click', () => openTaskModal(el.closest('.task-row').dataset.id));
+    if (currentUserRole === 'admin') {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', () => openTaskModal(el.closest('.task-row').dataset.id));
+    } else {
+      el.style.cursor = 'default';
+    }
   });
   list.querySelectorAll('.task-status-inline').forEach(sel => {
     sel.addEventListener('change', async (e) => {
@@ -560,6 +575,7 @@ function openTaskModal(id) {
   document.getElementById('taskId').value = t ? t.id : '';
   document.getElementById('taskTitle').value = t ? t.title : '';
   document.getElementById('taskClient').value = t ? (t.client_id || '') : '';
+  document.getElementById('taskAssignTo').value = t ? (t.assigned_to || '') : '';
   document.getElementById('taskType').value = t ? t.type : 'social';
   document.getElementById('taskStatus').value = t ? t.status : 'todo';
   document.getElementById('taskDue').value = t ? (t.due_date || '') : '';
@@ -573,6 +589,7 @@ document.getElementById('saveTaskBtn').addEventListener('click', async () => {
   const payload = {
     title: document.getElementById('taskTitle').value.trim(),
     client_id: document.getElementById('taskClient').value || null,
+    assigned_to: document.getElementById('taskAssignTo').value || null,
     type: document.getElementById('taskType').value,
     status: document.getElementById('taskStatus').value,
     due_date: document.getElementById('taskDue').value || null,
