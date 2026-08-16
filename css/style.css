@@ -391,6 +391,33 @@ a { color: inherit; }
   color: var(--purple);
 }
 
+.payment-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.payment-row .pay-amount { font-weight: 700; flex: 1; }
+.payment-row .pay-status { font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; }
+.payment-row .pay-status.full { background: #E4F4EC; color: #2F7A56; }
+.payment-row .pay-status.partial { background: #FCF1DC; color: #A87415; }
+.membership-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  margin-left: 8px;
+}
+.membership-badge.active { background: #E4F4EC; color: #2F7A56; }
+.membership-badge.ended { background: #EFECF2; color: var(--muted); }
+
 .workflow-row {
   background: var(--card);
   border: 1px solid var(--line);
