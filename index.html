@@ -186,7 +186,8 @@
         <label class="check-item"><input type="checkbox" class="svc-check" value="other"> Other</label>
       </div>
     </div>
-    <div class="field"><label>Monthly fee (USD)</label><input type="number" id="clientMonthlyFee" placeholder="e.g. 400"></div>
+    <div id="monthlyFeeField" class="field" style="display:none;"><label>Monthly fee (USD) — media management</label><input type="number" id="clientMonthlyFee" placeholder="e.g. 400"></div>
+    <div id="serviceFeeField" class="field" style="display:none;"><label>Service fee (USD) — one-time, website</label><input type="number" id="clientServiceFee" placeholder="e.g. 1200"></div>
     <div class="field"><label>Start date</label><input type="date" id="clientStartDate"></div>
     <div class="field"><label>End date (leave blank if still active)</label><input type="date" id="clientEndDate"></div>
 
@@ -363,10 +364,36 @@
 
     <div id="adsFieldsSection" class="credential-section" style="display:none;">
       <h4>Ads Campaign Details</h4>
+      <div class="field">
+        <label>Platform</label>
+        <select id="adsPlatform">
+          <option value="facebook">Facebook</option>
+          <option value="instagram">Instagram</option>
+          <option value="tiktok">TikTok</option>
+          <option value="google">Google</option>
+          <option value="snapchat">Snapchat</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Goal</label>
+        <select id="adsGoal">
+          <option value="awareness">Awareness</option>
+          <option value="engagement">Engagement</option>
+          <option value="traffic">Traffic</option>
+          <option value="conversions">Conversions</option>
+          <option value="leads">Leads</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
       <div class="field"><label>Date created</label><input type="date" id="adsDateCreated"></div>
       <div class="field"><label>Budget spent (USD)</label><input type="number" id="adsBudgetSpent"></div>
       <div class="field"><label>Duration (days)</label><input type="number" id="adsDuration"></div>
-      <div class="field"><label>Results</label><textarea id="adsResults" rows="2" placeholder="e.g. reach, clicks, conversions"></textarea></div>
+      <div class="field"><label>Views / Impressions</label><input type="number" id="adsViews"></div>
+      <div class="field"><label>Reach</label><input type="number" id="adsReach"></div>
+      <div class="field"><label>Clicks</label><input type="number" id="adsClicks"></div>
+      <div class="field"><label>Conversions</label><input type="number" id="adsConversions"></div>
+      <div class="field"><label>Diagnosis / results summary</label><textarea id="adsResults" rows="2" placeholder="e.g. strong CTR but low conversion — landing page needs work"></textarea></div>
     </div>
 
     <div class="modal-actions">
