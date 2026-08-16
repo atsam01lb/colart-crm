@@ -188,6 +188,19 @@
     </div>
     <div id="monthlyFeeField" class="field" style="display:none;"><label>Monthly fee (USD) — media management</label><input type="number" id="clientMonthlyFee" placeholder="e.g. 400"></div>
     <div id="serviceFeeField" class="field" style="display:none;"><label>Service fee (USD) — one-time, website</label><input type="number" id="clientServiceFee" placeholder="e.g. 1200"></div>
+    <div class="field">
+      <label>Discount</label>
+      <select id="clientDiscountType">
+        <option value="none">No discount</option>
+        <option value="percentage">Percentage off</option>
+        <option value="fixed">Fixed amount off</option>
+      </select>
+    </div>
+    <div class="field" id="discountValueField" style="display:none;">
+      <label id="discountValueLabel">Discount value</label>
+      <input type="number" id="clientDiscountValue" placeholder="e.g. 10">
+    </div>
+    <div id="discountPreview" style="font-size:12px; color:var(--muted); margin:-10px 0 16px;"></div>
     <div class="field"><label>Start date</label><input type="date" id="clientStartDate"></div>
     <div class="field"><label>End date (leave blank if still active)</label><input type="date" id="clientEndDate"></div>
 
