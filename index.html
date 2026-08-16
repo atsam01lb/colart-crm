@@ -184,6 +184,8 @@
       </div>
     </div>
     <div class="field"><label>Monthly fee (USD)</label><input type="number" id="clientMonthlyFee" placeholder="e.g. 400"></div>
+    <div class="field"><label>Start date</label><input type="date" id="clientStartDate"></div>
+    <div class="field"><label>End date (leave blank if still active)</label><input type="date" id="clientEndDate"></div>
 
     <div id="socialFieldsSection" class="credential-section" style="display:none;">
       <h4>Social Media Access</h4>
@@ -207,9 +209,39 @@
     </div>
 
     <div class="field"><label>Notes</label><textarea id="clientNotes" rows="3"></textarea></div>
+    <div id="paymentsSection" class="credential-section" style="display:none;">
+      <h4>Payments <span id="membershipBadge"></span></h4>
+      <div id="paymentsList"></div>
+      <button type="button" class="btn btn-ghost" id="addPaymentBtn" style="margin-top:8px;">+ Add payment</button>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-primary" id="saveClientBtn">Save</button>
       <button class="btn btn-danger" id="deleteClientBtn" style="display:none;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAYMENT MODAL -->
+<div class="modal-overlay" id="paymentModal">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" id="closePaymentModal">&times;</button>
+    <h2 id="paymentModalTitle">Add payment</h2>
+    <input type="hidden" id="paymentId">
+    <input type="hidden" id="paymentClientId">
+    <div class="field"><label>Payment date</label><input type="date" id="paymentDate"></div>
+    <div class="field"><label>Amount (USD)</label><input type="number" id="paymentAmount"></div>
+    <div class="field">
+      <label>Status</label>
+      <select id="paymentStatus">
+        <option value="full">Fully paid</option>
+        <option value="partial">Partially paid</option>
+      </select>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="paymentNotes" rows="2"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="savePaymentBtn">Save</button>
+      <button class="btn btn-danger" id="deletePaymentBtn" style="display:none;">Delete</button>
     </div>
   </div>
 </div>
