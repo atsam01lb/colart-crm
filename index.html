@@ -57,6 +57,12 @@
         <div class="stat-box"><div class="num" id="statTasks">0</div><div class="lbl">Open tasks</div></div>
         <div class="stat-box"><div class="num" id="statOverdue">0</div><div class="lbl">Overdue tasks</div></div>
       </div>
+      <h3>Financial — this month</h3>
+      <div class="stat-strip">
+        <div class="stat-box"><div class="num" id="statMRR">$0</div><div class="lbl">Monthly recurring revenue</div></div>
+        <div class="stat-box"><div class="num" id="statAdSpend">$0</div><div class="lbl">Ad spend this month</div></div>
+        <div class="stat-box"><div class="num" id="statPaidClients">0</div><div class="lbl">Clients with monthly fee</div></div>
+      </div>
       <h3>Recently added clients</h3>
       <div class="card-grid" id="recentClients"></div>
     </div>
@@ -167,9 +173,39 @@
       </select>
     </div>
     <div class="field">
-      <label>Services (comma separated)</label>
-      <input type="text" id="clientServices" placeholder="social, ads, web, brand, legal">
+      <label>Services</label>
+      <div class="service-checks">
+        <label class="check-item"><input type="checkbox" class="svc-check" value="social"> Social Media</label>
+        <label class="check-item"><input type="checkbox" class="svc-check" value="ads"> Ads</label>
+        <label class="check-item"><input type="checkbox" class="svc-check" value="web"> Web Development</label>
+        <label class="check-item"><input type="checkbox" class="svc-check" value="brand"> Brand</label>
+        <label class="check-item"><input type="checkbox" class="svc-check" value="legal"> Legal</label>
+        <label class="check-item"><input type="checkbox" class="svc-check" value="other"> Other</label>
+      </div>
     </div>
+    <div class="field"><label>Monthly fee (USD)</label><input type="number" id="clientMonthlyFee" placeholder="e.g. 400"></div>
+
+    <div id="socialFieldsSection" class="credential-section" style="display:none;">
+      <h4>Social Media Access</h4>
+      <div class="field"><label>Main email</label><input type="text" id="socialEmail"></div>
+      <div class="field"><label>Email password</label><input type="text" id="socialEmailPassword"></div>
+      <div class="field"><label>Facebook page (account associated with)</label><input type="text" id="facebookPage"></div>
+      <div class="field"><label>Instagram username</label><input type="text" id="instagramUsername"></div>
+      <div class="field"><label>Instagram password</label><input type="text" id="instagramPassword"></div>
+      <div class="field"><label>TikTok username</label><input type="text" id="tiktokUsername"></div>
+      <div class="field"><label>TikTok password</label><input type="text" id="tiktokPassword"></div>
+    </div>
+
+    <div id="webFieldsSection" class="credential-section" style="display:none;">
+      <h4>Web Development Access</h4>
+      <div class="field"><label>Main email</label><input type="text" id="webEmail"></div>
+      <div class="field"><label>Email password</label><input type="text" id="webEmailPassword"></div>
+      <div class="field"><label>Domain username</label><input type="text" id="domainUsername"></div>
+      <div class="field"><label>Domain password</label><input type="text" id="domainPassword"></div>
+      <div class="field"><label>Hosting username</label><input type="text" id="hostingUsername"></div>
+      <div class="field"><label>Hosting password</label><input type="text" id="hostingPassword"></div>
+    </div>
+
     <div class="field"><label>Notes</label><textarea id="clientNotes" rows="3"></textarea></div>
     <div class="modal-actions">
       <button class="btn btn-primary" id="saveClientBtn">Save</button>
@@ -286,6 +322,15 @@
       </select>
     </div>
     <div class="field"><label>Notes</label><textarea id="workflowNotes" rows="3"></textarea></div>
+
+    <div id="adsFieldsSection" class="credential-section" style="display:none;">
+      <h4>Ads Campaign Details</h4>
+      <div class="field"><label>Date created</label><input type="date" id="adsDateCreated"></div>
+      <div class="field"><label>Budget spent (USD)</label><input type="number" id="adsBudgetSpent"></div>
+      <div class="field"><label>Duration (days)</label><input type="number" id="adsDuration"></div>
+      <div class="field"><label>Results</label><textarea id="adsResults" rows="2" placeholder="e.g. reach, clicks, conversions"></textarea></div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-primary" id="saveWorkflowBtn">Save</button>
       <button class="btn btn-danger" id="deleteWorkflowBtn" style="display:none;">Delete</button>
