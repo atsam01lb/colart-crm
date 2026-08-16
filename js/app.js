@@ -226,15 +226,23 @@ document.getElementById('addPaymentBtn').addEventListener('click', () => {
   if (!clientId) { alert('Save the client first, then add payments.'); return; }
   openPaymentModal(null, clientId);
 });
+
+document.getElementById('generatePaymentBtn').addEventListener('click', () => {
+  const clientId = document.getElementById('clientId').value;
+  if (!clientId) { alert('Save the client first, then generate a payment.'); return; }
+  const c = clients.find(x => x.id === clientId);
+  if (!c || !c.monthly_fee) { alert('Set a monthly fee for this client first — the payment is pre-filled from it.'); return; }
+  openPaymentModal(null, clientId, { amount: c.monthly_fee, date: new Date().toISOString().split('T')[0] });
+});
 document.getElementById('closePaymentModal').addEventListener('click', () => closeModal('paymentModal'));
 
-function openPaymentModal(id, clientId) {
+function openPaymentModal(id, clientId, prefill) {
   const p = payments.find(x => x.id === id);
   document.getElementById('paymentModalTitle').textContent = p ? 'Edit payment' : 'Add payment';
   document.getElementById('paymentId').value = p ? p.id : '';
   document.getElementById('paymentClientId').value = clientId;
-  document.getElementById('paymentDate').value = p ? p.payment_date : '';
-  document.getElementById('paymentAmount').value = p ? (p.amount || '') : '';
+  document.getElementById('paymentDate').value = p ? p.payment_date : (prefill ? prefill.date : '');
+  document.getElementById('paymentAmount').value = p ? (p.amount || '') : (prefill ? prefill.amount : '');
   document.getElementById('paymentStatus').value = p ? p.status : 'full';
   document.getElementById('paymentNotes').value = p ? (p.notes || '') : '';
   document.getElementById('deletePaymentBtn').style.display = p ? 'inline-flex' : 'none';
