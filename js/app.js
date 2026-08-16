@@ -4,6 +4,7 @@ let deals = [];
 let tasks = [];
 let workflowItems = [];
 let payments = [];
+let currentUserRole = 'employee';
 
 const WORKFLOW_STAGES = [
   { key: 'planned', label: 'Planned' },
@@ -68,12 +69,31 @@ async function checkSession() {
 async function enterApp() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
+
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  const { data: profile } = await supabaseClient.from('profiles').select('role, full_name').eq('id', user.id).single();
+  currentUserRole = profile ? profile.role : 'employee';
+  applyRoleRestrictions();
+
   await loadAll();
   renderDashboard();
   renderClients();
   renderPipeline();
   renderTasks();
   renderWorkflow();
+}
+
+function applyRoleRestrictions() {
+  const isAdmin = currentUserRole === 'admin';
+  const dashboardNav = document.querySelector('.nav-item[data-view="dashboard"]');
+  dashboardNav.style.display = isAdmin ? '' : 'none';
+  if (!isAdmin) {
+    // employees land on Clients instead of the financial dashboard
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelector('.nav-item[data-view="clients"]').classList.add('active');
+    document.getElementById('view-clients').classList.add('active');
+  }
 }
 
 // ---------- NAV ----------
@@ -231,6 +251,14 @@ function openClientModal(id) {
   toggleServiceSections();
   toggleDiscountField();
   renderPaymentsSection(c);
+
+  const isAdmin = currentUserRole === 'admin';
+  document.getElementById('monthlyFeeField').style.display = (isAdmin && document.getElementById('monthlyFeeField').style.display !== 'none') ? 'block' : 'none';
+  document.getElementById('serviceFeeField').style.display = (isAdmin && document.getElementById('serviceFeeField').style.display !== 'none') ? 'block' : 'none';
+  const discountRow = document.getElementById('clientDiscountType').closest('.field');
+  discountRow.style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('discountValueField').style.display = isAdmin ? document.getElementById('discountValueField').style.display : 'none';
+  document.getElementById('paymentsSection').style.display = isAdmin ? document.getElementById('paymentsSection').style.display : 'none';
   openModal('clientModal');
 }
 
