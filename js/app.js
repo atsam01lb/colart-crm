@@ -76,7 +76,7 @@ async function enterApp() {
   currentUserRole = profile ? profile.role : 'employee';
   applyRoleRestrictions();
 
-  const { data: allProfiles } = await supabaseClient.from('profiles').select('id, full_name, role');
+  const { data: allProfiles } = await supabaseClient.from('profiles').select('id, full_name, role, position');
   profiles = allProfiles || [];
 
   await loadAll();
@@ -85,6 +85,7 @@ async function enterApp() {
   renderPipeline();
   renderTasks();
   renderWorkflow();
+  renderTeam();
 }
 
 function applyRoleRestrictions() {
@@ -92,6 +93,7 @@ function applyRoleRestrictions() {
   const dashboardNav = document.querySelector('.nav-item[data-view="dashboard"]');
   dashboardNav.style.display = isAdmin ? '' : 'none';
   document.getElementById('addTaskBtn').style.display = isAdmin ? '' : 'none';
+  document.getElementById('teamNavItem').style.display = isAdmin ? '' : 'none';
   if (!isAdmin) {
     // employees land on Clients instead of the financial dashboard
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -754,6 +756,41 @@ document.getElementById('deleteWorkflowBtn').addEventListener('click', async () 
   await loadAll();
   renderWorkflow();
 });
+
+// ---------- TEAM ----------
+function renderTeam() {
+  if (currentUserRole !== 'admin') return;
+  const list = document.getElementById('teamList');
+  if (!profiles.length) {
+    list.innerHTML = `<div class="empty-state">No team members found.</div>`;
+    return;
+  }
+  list.innerHTML = profiles.map(p => `
+    <div class="team-row" data-id="${p.id}">
+      <input type="text" class="team-name" value="${escapeHTML(p.full_name || '')}" placeholder="Name" style="flex:1; min-width:140px;">
+      <input type="text" class="team-position" value="${escapeHTML(p.position || '')}" placeholder="Position (e.g. Content Creator)" style="flex:1; min-width:160px;">
+      <select class="team-role">
+        <option value="employee" ${p.role === 'employee' ? 'selected' : ''}>Employee</option>
+        <option value="admin" ${p.role === 'admin' ? 'selected' : ''}>Admin</option>
+      </select>
+      <button type="button" class="btn btn-primary team-save">Save</button>
+    </div>`).join('');
+
+  list.querySelectorAll('.team-row').forEach(row => {
+    row.querySelector('.team-save').addEventListener('click', async () => {
+      const id = row.dataset.id;
+      const payload = {
+        full_name: row.querySelector('.team-name').value.trim(),
+        position: row.querySelector('.team-position').value.trim(),
+        role: row.querySelector('.team-role').value,
+      };
+      await supabaseClient.from('profiles').update(payload).eq('id', id);
+      const { data: allProfiles } = await supabaseClient.from('profiles').select('id, full_name, role, position');
+      profiles = allProfiles || [];
+      renderTeam();
+    });
+  });
+}
 
 // ---------- MODAL HELPERS ----------
 function openModal(id) { document.getElementById(id).classList.add('visible'); }
