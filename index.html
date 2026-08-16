@@ -37,6 +37,7 @@
     <div class="nav-item" data-view="pipeline">Pipeline</div>
     <div class="nav-item" data-view="tasks">Tasks</div>
     <div class="nav-item" data-view="workflow">Workflow</div>
+    <div class="nav-item" data-view="team" id="teamNavItem">Team</div>
 
     <div class="sidebar-footer" id="logoutBtn">Log out</div>
   </div>
@@ -149,6 +150,17 @@
         </select>
       </div>
       <div id="workflowList"></div>
+    </div>
+
+    <!-- TEAM -->
+    <div class="view" id="view-team">
+      <div class="main-header">
+        <div>
+          <h1 class="main-title">Team</h1>
+          <div class="main-sub">Everyone with a login — set their role and position. To add a new login, use Supabase → Authentication → Users.</div>
+        </div>
+      </div>
+      <div id="teamList"></div>
     </div>
 
   </div>
