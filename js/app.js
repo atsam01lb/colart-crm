@@ -3,6 +3,7 @@ let clients = [];
 let deals = [];
 let tasks = [];
 let workflowItems = [];
+let payments = [];
 
 const WORKFLOW_STAGES = [
   { key: 'planned', label: 'Planned' },
@@ -69,16 +70,18 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 // ---------- DATA LOADING ----------
 async function loadAll() {
-  const [c, d, t, w] = await Promise.all([
+  const [c, d, t, w, p] = await Promise.all([
     supabaseClient.from('clients').select('*').order('created_at', { ascending: false }),
     supabaseClient.from('pipeline').select('*').order('created_at', { ascending: false }),
     supabaseClient.from('tasks').select('*').order('due_date', { ascending: true }),
     supabaseClient.from('workflow_items').select('*').order('start_date', { ascending: false }),
+    supabaseClient.from('payments').select('*').order('payment_date', { ascending: false }),
   ]);
   clients = c.data || [];
   deals = d.data || [];
   tasks = t.data || [];
   workflowItems = w.data || [];
+  payments = p.data || [];
 }
 
 // ---------- DASHBOARD ----------
@@ -153,6 +156,8 @@ function openClientModal(id) {
   document.getElementById('clientWebsite').value = c ? (c.website || '') : '';
   document.getElementById('clientStatus').value = c ? c.status : 'prospect';
   document.getElementById('clientMonthlyFee').value = c ? (c.monthly_fee || '') : '';
+  document.getElementById('clientStartDate').value = c ? (c.start_date || '') : '';
+  document.getElementById('clientEndDate').value = c ? (c.end_date || '') : '';
   document.getElementById('clientNotes').value = c ? (c.notes || '') : '';
   document.getElementById('deleteClientBtn').style.display = c ? 'inline-flex' : 'none';
 
@@ -175,8 +180,89 @@ function openClientModal(id) {
   document.getElementById('hostingPassword').value = c ? (c.hosting_password || '') : '';
 
   toggleServiceSections();
+  renderPaymentsSection(c);
   openModal('clientModal');
 }
+
+function renderPaymentsSection(c) {
+  const section = document.getElementById('paymentsSection');
+  if (!c) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+
+  const badge = document.getElementById('membershipBadge');
+  const today = new Date().toISOString().split('T')[0];
+  const isActive = c.status === 'active' && (!c.end_date || c.end_date >= today);
+  badge.innerHTML = `<span class="membership-badge ${isActive ? 'active' : 'ended'}">${isActive ? 'Active' : 'Ended'}</span>`;
+
+  const clientPayments = payments.filter(p => p.client_id === c.id);
+  const list = document.getElementById('paymentsList');
+  list.innerHTML = clientPayments.length
+    ? clientPayments.map(p => `
+        <div class="payment-row" data-id="${p.id}">
+          <span class="pay-amount">${p.amount ? '$' + Number(p.amount).toLocaleString() : '—'}</span>
+          <span>${p.payment_date || ''}</span>
+          <span class="pay-status ${p.status}">${p.status === 'full' ? 'Fully paid' : 'Partial'}</span>
+        </div>`).join('')
+    : `<div style="font-size:13px; color:var(--muted);">No payments logged yet.</div>`;
+
+  list.querySelectorAll('.payment-row').forEach(row => {
+    row.addEventListener('click', () => openPaymentModal(row.dataset.id, c.id));
+  });
+}
+
+document.getElementById('addPaymentBtn').addEventListener('click', () => {
+  const clientId = document.getElementById('clientId').value;
+  if (!clientId) { alert('Save the client first, then add payments.'); return; }
+  openPaymentModal(null, clientId);
+});
+document.getElementById('closePaymentModal').addEventListener('click', () => closeModal('paymentModal'));
+
+function openPaymentModal(id, clientId) {
+  const p = payments.find(x => x.id === id);
+  document.getElementById('paymentModalTitle').textContent = p ? 'Edit payment' : 'Add payment';
+  document.getElementById('paymentId').value = p ? p.id : '';
+  document.getElementById('paymentClientId').value = clientId;
+  document.getElementById('paymentDate').value = p ? p.payment_date : '';
+  document.getElementById('paymentAmount').value = p ? (p.amount || '') : '';
+  document.getElementById('paymentStatus').value = p ? p.status : 'full';
+  document.getElementById('paymentNotes').value = p ? (p.notes || '') : '';
+  document.getElementById('deletePaymentBtn').style.display = p ? 'inline-flex' : 'none';
+  openModal('paymentModal');
+}
+
+document.getElementById('savePaymentBtn').addEventListener('click', async () => {
+  const id = document.getElementById('paymentId').value;
+  const clientId = document.getElementById('paymentClientId').value;
+  const payload = {
+    client_id: clientId,
+    payment_date: document.getElementById('paymentDate').value || null,
+    amount: document.getElementById('paymentAmount').value || null,
+    status: document.getElementById('paymentStatus').value,
+    notes: document.getElementById('paymentNotes').value.trim(),
+  };
+  if (!payload.payment_date) { alert('Payment date is required.'); return; }
+
+  if (id) {
+    await supabaseClient.from('payments').update(payload).eq('id', id);
+  } else {
+    await supabaseClient.from('payments').insert(payload);
+  }
+  closeModal('paymentModal');
+  await loadAll();
+  const c = clients.find(x => x.id === clientId);
+  renderPaymentsSection(c);
+});
+
+document.getElementById('deletePaymentBtn').addEventListener('click', async () => {
+  const id = document.getElementById('paymentId').value;
+  const clientId = document.getElementById('paymentClientId').value;
+  if (!confirm('Delete this payment record?')) return;
+  await supabaseClient.from('payments').delete().eq('id', id);
+  closeModal('paymentModal');
+  await loadAll();
+  const c = clients.find(x => x.id === clientId);
+  renderPaymentsSection(c);
+});
 
 function toggleServiceSections() {
   const checked = Array.from(document.querySelectorAll('.svc-check')).filter(cb => cb.checked).map(cb => cb.value);
@@ -198,6 +284,8 @@ document.getElementById('saveClientBtn').addEventListener('click', async () => {
     status: document.getElementById('clientStatus').value,
     services: services,
     monthly_fee: document.getElementById('clientMonthlyFee').value || null,
+    start_date: document.getElementById('clientStartDate').value || null,
+    end_date: document.getElementById('clientEndDate').value || null,
     notes: document.getElementById('clientNotes').value.trim(),
     social_email: document.getElementById('socialEmail').value.trim(),
     social_email_password: document.getElementById('socialEmailPassword').value.trim(),
