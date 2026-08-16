@@ -356,6 +356,41 @@ a { color: inherit; }
 }
 
 /* ---------- Workflow ---------- */
+/* ---------- Service checkboxes & credential sections ---------- */
+.service-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.check-item input { cursor: pointer; }
+
+.credential-section {
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  padding: 14px 16px 4px;
+  margin-bottom: 16px;
+  background: var(--paper);
+}
+.credential-section h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--purple);
+}
+
 .workflow-row {
   background: var(--card);
   border: 1px solid var(--line);
