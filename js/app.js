@@ -14,6 +14,14 @@ const WORKFLOW_STAGES = [
 
 // Prospect and Paused are manual pipeline states. For everyone else (status = "client",
 // or legacy "active"/"past" values), Active vs Ended is computed from start/end dates.
+function getEffectiveFee(baseFee, discountType, discountValue) {
+  const base = Number(baseFee || 0);
+  if (!discountType || discountType === 'none' || !discountValue) return base;
+  if (discountType === 'percentage') return Math.max(0, base - (base * Number(discountValue) / 100));
+  if (discountType === 'fixed') return Math.max(0, base - Number(discountValue));
+  return base;
+}
+
 function getEffectiveStatus(c) {
   if (c.status === 'prospect' || c.status === 'paused') return c.status;
   const today = new Date().toISOString().split('T')[0];
@@ -103,7 +111,7 @@ function renderDashboard() {
   document.getElementById('statOverdue').textContent = tasks.filter(t => t.due_date && t.due_date < today && t.status !== 'done').length;
 
   const paidClients = clients.filter(c => getEffectiveStatus(c) === 'active' && c.monthly_fee);
-  const mrr = paidClients.reduce((sum, c) => sum + Number(c.monthly_fee || 0), 0);
+  const mrr = paidClients.reduce((sum, c) => sum + getEffectiveFee(c.monthly_fee, c.discount_type, c.discount_value), 0);
   document.getElementById('statMRR').textContent = '$' + mrr.toLocaleString();
   document.getElementById('statPaidClients').textContent = paidClients.length;
 
@@ -195,6 +203,8 @@ function openClientModal(id) {
   document.getElementById('clientStatus').value = c ? (['active','past'].includes(c.status) ? 'client' : c.status) : 'prospect';
   document.getElementById('clientMonthlyFee').value = c ? (c.monthly_fee || '') : '';
   document.getElementById('clientServiceFee').value = c ? (c.service_fee || '') : '';
+  document.getElementById('clientDiscountType').value = c ? (c.discount_type || 'none') : 'none';
+  document.getElementById('clientDiscountValue').value = c ? (c.discount_value || '') : '';
   document.getElementById('clientStartDate').value = c ? (c.start_date || '') : '';
   document.getElementById('clientEndDate').value = c ? (c.end_date || '') : '';
   document.getElementById('clientNotes').value = c ? (c.notes || '') : '';
@@ -219,6 +229,7 @@ function openClientModal(id) {
   document.getElementById('hostingPassword').value = c ? (c.hosting_password || '') : '';
 
   toggleServiceSections();
+  toggleDiscountField();
   renderPaymentsSection(c);
   openModal('clientModal');
 }
@@ -316,8 +327,37 @@ function toggleServiceSections() {
   document.getElementById('webFieldsSection').style.display = checked.includes('web') ? 'block' : 'none';
   document.getElementById('monthlyFeeField').style.display = checked.includes('social') ? 'block' : 'none';
   document.getElementById('serviceFeeField').style.display = checked.includes('web') ? 'block' : 'none';
+  updateDiscountPreview();
 }
 document.querySelectorAll('.svc-check').forEach(cb => cb.addEventListener('change', toggleServiceSections));
+
+function toggleDiscountField() {
+  const type = document.getElementById('clientDiscountType').value;
+  document.getElementById('discountValueField').style.display = type === 'none' ? 'none' : 'block';
+  document.getElementById('discountValueLabel').textContent = type === 'percentage' ? 'Discount %' : 'Discount amount (USD)';
+  updateDiscountPreview();
+}
+
+function updateDiscountPreview() {
+  const type = document.getElementById('clientDiscountType').value;
+  const value = document.getElementById('clientDiscountValue').value;
+  const monthly = document.getElementById('clientMonthlyFee').value;
+  const service = document.getElementById('clientServiceFee').value;
+  const preview = document.getElementById('discountPreview');
+  if (type === 'none' || !value) { preview.textContent = ''; return; }
+  const lines = [];
+  if (document.getElementById('monthlyFeeField').style.display !== 'none' && monthly) {
+    lines.push(`Monthly fee after discount: $${getEffectiveFee(monthly, type, value).toLocaleString()}`);
+  }
+  if (document.getElementById('serviceFeeField').style.display !== 'none' && service) {
+    lines.push(`Service fee after discount: $${getEffectiveFee(service, type, value).toLocaleString()}`);
+  }
+  preview.textContent = lines.join(' · ');
+}
+document.getElementById('clientDiscountType').addEventListener('change', toggleDiscountField);
+document.getElementById('clientDiscountValue').addEventListener('input', updateDiscountPreview);
+document.getElementById('clientMonthlyFee').addEventListener('input', updateDiscountPreview);
+document.getElementById('clientServiceFee').addEventListener('input', updateDiscountPreview);
 
 document.getElementById('saveClientBtn').addEventListener('click', async () => {
   const id = document.getElementById('clientId').value;
@@ -333,6 +373,8 @@ document.getElementById('saveClientBtn').addEventListener('click', async () => {
     services: services,
     monthly_fee: document.getElementById('clientMonthlyFee').value || null,
     service_fee: document.getElementById('clientServiceFee').value || null,
+    discount_type: document.getElementById('clientDiscountType').value,
+    discount_value: document.getElementById('clientDiscountValue').value || null,
     start_date: document.getElementById('clientStartDate').value || null,
     end_date: document.getElementById('clientEndDate').value || null,
     notes: document.getElementById('clientNotes').value.trim(),
