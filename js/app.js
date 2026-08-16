@@ -12,6 +12,16 @@ const WORKFLOW_STAGES = [
   { key: 'posted', label: 'Posted' },
 ];
 
+// Prospect and Paused are manual pipeline states. For everyone else (status = "client",
+// or legacy "active"/"past" values), Active vs Ended is computed from start/end dates.
+function getEffectiveStatus(c) {
+  if (c.status === 'prospect' || c.status === 'paused') return c.status;
+  const today = new Date().toISOString().split('T')[0];
+  if (c.end_date && c.end_date < today) return 'past';
+  if (c.start_date && c.start_date > today) return 'prospect';
+  return 'active';
+}
+
 const PIPELINE_STAGES = [
   { key: 'inquiry', label: 'Inquiry' },
   { key: 'proposal_sent', label: 'Proposal sent' },
@@ -86,13 +96,13 @@ async function loadAll() {
 
 // ---------- DASHBOARD ----------
 function renderDashboard() {
-  document.getElementById('statActive').textContent = clients.filter(c => c.status === 'active').length;
+  document.getElementById('statActive').textContent = clients.filter(c => getEffectiveStatus(c) === 'active').length;
   document.getElementById('statProspects').textContent = deals.filter(d => !['onboarded', 'lost'].includes(d.stage)).length;
   document.getElementById('statTasks').textContent = tasks.filter(t => t.status !== 'done').length;
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('statOverdue').textContent = tasks.filter(t => t.due_date && t.due_date < today && t.status !== 'done').length;
 
-  const paidClients = clients.filter(c => c.status === 'active' && c.monthly_fee);
+  const paidClients = clients.filter(c => getEffectiveStatus(c) === 'active' && c.monthly_fee);
   const mrr = paidClients.reduce((sum, c) => sum + Number(c.monthly_fee || 0), 0);
   document.getElementById('statMRR').textContent = '$' + mrr.toLocaleString();
   document.getElementById('statPaidClients').textContent = paidClients.length;
@@ -117,10 +127,12 @@ function renderDashboard() {
 
 // ---------- CLIENTS ----------
 function clientCardHTML(c) {
+  const status = getEffectiveStatus(c);
+  const statusLabel = status === 'past' ? 'Ended' : status;
   const services = (c.services || []).map(s => `<span class="tag">${escapeHTML(s)}</span>`).join('');
   return `
-    <div class="client-card status-${c.status}" data-id="${c.id}">
-      <span class="status-pill status-${c.status}">${c.status}</span>
+    <div class="client-card status-${status}" data-id="${c.id}">
+      <span class="status-pill status-${status}">${statusLabel}</span>
       <h3>${escapeHTML(c.name)}</h3>
       <div class="meta">${escapeHTML(c.industry || '')}${c.contact_name ? ' · ' + escapeHTML(c.contact_name) : ''}</div>
       <div class="tag-row">${services}</div>
@@ -131,7 +143,7 @@ function renderClients() {
   const search = document.getElementById('clientSearch').value.toLowerCase();
   const filter = document.getElementById('clientFilter').value;
   const filtered = clients.filter(c =>
-    (!filter || c.status === filter) &&
+    (!filter || getEffectiveStatus(c) === filter) &&
     (!search || c.name.toLowerCase().includes(search) || (c.industry || '').toLowerCase().includes(search))
   );
   const grid = document.getElementById('clientGrid');
@@ -154,7 +166,7 @@ function openClientModal(id) {
   document.getElementById('clientPhone').value = c ? (c.phone || '') : '';
   document.getElementById('clientEmail').value = c ? (c.email || '') : '';
   document.getElementById('clientWebsite').value = c ? (c.website || '') : '';
-  document.getElementById('clientStatus').value = c ? c.status : 'prospect';
+  document.getElementById('clientStatus').value = c ? (['active','past'].includes(c.status) ? 'client' : c.status) : 'prospect';
   document.getElementById('clientMonthlyFee').value = c ? (c.monthly_fee || '') : '';
   document.getElementById('clientStartDate').value = c ? (c.start_date || '') : '';
   document.getElementById('clientEndDate').value = c ? (c.end_date || '') : '';
@@ -190,8 +202,7 @@ function renderPaymentsSection(c) {
   section.style.display = 'block';
 
   const badge = document.getElementById('membershipBadge');
-  const today = new Date().toISOString().split('T')[0];
-  const isActive = c.status === 'active' && (!c.end_date || c.end_date >= today);
+  const isActive = getEffectiveStatus(c) === 'active';
   badge.innerHTML = `<span class="membership-badge ${isActive ? 'active' : 'ended'}">${isActive ? 'Active' : 'Ended'}</span>`;
 
   const clientPayments = payments.filter(p => p.client_id === c.id);
