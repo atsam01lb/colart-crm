@@ -212,7 +212,10 @@
     <div id="paymentsSection" class="credential-section" style="display:none;">
       <h4>Payments <span id="membershipBadge"></span></h4>
       <div id="paymentsList"></div>
-      <button type="button" class="btn btn-ghost" id="addPaymentBtn" style="margin-top:8px;">+ Add payment</button>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button type="button" class="btn btn-primary" id="generatePaymentBtn">+ Generate this month's payment</button>
+        <button type="button" class="btn btn-ghost" id="addPaymentBtn">+ Add payment manually</button>
+      </div>
     </div>
 
     <div class="modal-actions">
